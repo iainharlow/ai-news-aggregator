@@ -1,41 +1,34 @@
 import React, { useState, useEffect } from 'react';
-    import axios from 'axios';
+import axios from 'axios';
 
-    const ArticleList = () => {
-        const [articles, setArticles] = useState([]);
-        const [error, setError] = useState(null);
+const ArticleList = () => {
+    const [articleText, setArticleText] = useState('');
+    const [error, setError] = useState(null);
 
-        useEffect(() => {
-            const fetchArticles = async () => {
-                try {
-                    const response = await axios.get('http://localhost:3000/articles');
-                    setArticles(response.data.articles);
-                } catch (err) {
-                    setError(err);
-                }
-            };
+    useEffect(() => {
+        const fetchArticle = async () => {
+            try {
+                const response = await axios.get('http://localhost:3000/articles');
+                setArticleText(response.data.articleText);
+            } catch (err) {
+                setError(err);
+            }
+        };
 
-            fetchArticles();
-        }, []);
+        fetchArticle();
+    }, []);
 
-        if (error) {
-            return <p>Error: {error.message}</p>;
-        }
-        if (!articles || articles.length === 0) {
-            return <p>Loading articles...</p>;
-        }
+     if (error) {
+        return <p>Error: {error.message}</p>;
+    }
+     if (!articleText) {
+        return <p>Loading article...</p>;
+    }
+     return (
+        <div>
+            <p>{articleText}</p>
+        </div>
+     );
+  };
 
-        return (
-            <ul>
-                {articles.map((article) => (
-                    <li key={article.guid}>
-                        <a href={article.link} target="_blank" rel="noopener noreferrer">
-                            {article.title}
-                        </a>
-                    </li>
-                ))}
-            </ul>
-        );
-    };
-
-    export default ArticleList;
+export default ArticleList;
