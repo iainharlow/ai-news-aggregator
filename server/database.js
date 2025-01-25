@@ -14,15 +14,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
  const createTables = () => {
   db.serialize(() => {
-   db.run(`
-      CREATE TABLE IF NOT EXISTS articles (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT,
-          link TEXT UNIQUE,
-          full_text TEXT,
-          published_date TEXT
-      );
-  `);
+    db.run(`
+        CREATE TABLE IF NOT EXISTS articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            link TEXT UNIQUE,
+            full_text TEXT,
+            published_date TEXT,
+            feed_url TEXT
+        );
+    `);
   db.run(`
       CREATE TABLE IF NOT EXISTS summaries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
