@@ -1,0 +1,25 @@
+.
+├── client
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── public
+│   │   └── vite.svg
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.jsx
+│   │   ├── assets
+│   │   ├── index.css
+│   │   └── main.jsx
+│   └── vite.config.js
+├── project_tree.txt
+└── server
+    ├── index.js
+    ├── package-lock.json
+    ├── package.json
+    └── routes
+        └── articles.js
+
+7 directories, 16 files
