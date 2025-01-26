@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const ArticleList = () => {
+const ArticleList = ({ defaultFeedUrl }) => {
     const [articleText, setArticleText] = useState('');
     const [summary, setSummary] = useState('');
     const [error, setError] = useState(null);
-    const [feedUrl, setFeedUrl] = useState('');
+    const [feedUrl, setFeedUrl] = useState(defaultFeedUrl || '');
 
    const fetchArticle = async () => {
         try {
@@ -22,6 +22,9 @@ const ArticleList = () => {
       event.preventDefault();
       fetchArticle();
     };
+
+    useEffect(() => {
+    }, []);
 
 
     if (error) {

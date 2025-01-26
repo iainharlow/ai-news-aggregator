@@ -2,7 +2,6 @@ const express = require('express');
 const app = express();
 const dotenv = require('dotenv');
 const cors = require('cors');
-const db = require('./database');
 
 dotenv.config()
 
@@ -14,10 +13,12 @@ app.use(express.json());
 const articleRouter = require('./routes/articles');
 app.use('/articles', articleRouter); // Add the new route
 
+const feedRouter = require('./routes/feeds');
+ app.use('/feeds', feedRouter);
+
 app.get('/', (req, res) => {
     res.send('Server is running');
 });
-
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
