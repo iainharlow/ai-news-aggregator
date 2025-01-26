@@ -5,7 +5,6 @@ const FeedList = ({onFeedSelect}) => {
     const [feeds, setFeeds] = useState([]);
     const [error, setError] = useState(null);
 
-
     useEffect(() => {
         const fetchFeeds = async () => {
             try {
