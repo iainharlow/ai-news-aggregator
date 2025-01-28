@@ -3,24 +3,37 @@ import axios from "axios";
 
 function ArticleList({ feedUrl }) {
   const [articles, setArticles] = useState([]);
+  const [fetchStatus, setFetchStatus] = useState("");
 
-  // Fetch existing articles
   useEffect(() => {
     if (!feedUrl) return;
-    axios.get(`http://localhost:3000/articles?feedUrl=${encodeURIComponent(feedUrl)}`)
-      .then(res => setArticles(res.data))
-      .catch(err => console.error(err));
+    fetchArticles();
   }, [feedUrl]);
 
-  // Fetch new articles, then refresh
-  const handleFetchLatest = async () => {
-    if (!feedUrl) return;
+  const fetchArticles = async () => {
     try {
-      await axios.get(`http://localhost:3000/articles/fetch?feedUrl=${encodeURIComponent(feedUrl)}`);
       const res = await axios.get(`http://localhost:3000/articles?feedUrl=${encodeURIComponent(feedUrl)}`);
       setArticles(res.data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleFetchLatest = async () => {
+    if (!feedUrl) return;
+    setFetchStatus("Checking for new articles...");
+    try {
+      const fetchRes = await axios.get(`http://localhost:3000/articles/fetch?feedUrl=${encodeURIComponent(feedUrl)}`);
+      if (fetchRes.data?.newlyAdded?.length) {
+        setFetchStatus(`Added ${fetchRes.data.newlyAdded.length} new articles.`);
+      } else {
+        setFetchStatus("No new articles found.");
+      }
+      // Now refresh the local list
+      await fetchArticles();
+    } catch (err) {
+      console.error(err);
+      setFetchStatus("Error fetching articles.");
     }
   };
 
@@ -30,8 +43,9 @@ function ArticleList({ feedUrl }) {
     <div>
       <h2>Articles for {feedUrl}</h2>
       <button onClick={handleFetchLatest}>Fetch Latest</button>
+      <p>{fetchStatus}</p>
       {articles.map(article => (
-        <div key={article.id}>
+        <div key={article.id} style={{ marginBottom: "1rem" }}>
           <h3>{article.title}</h3>
           <p>{article.summary}</p>
         </div>
