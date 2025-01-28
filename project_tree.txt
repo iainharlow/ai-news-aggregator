@@ -10,16 +10,22 @@
 │   ├── src
 │   │   ├── App.css
 │   │   ├── App.jsx
-│   │   ├── assets
+│   │   ├── components
+│   │   │   ├── ArticleList.jsx
+│   │   │   └── FeedList.jsx
 │   │   ├── index.css
 │   │   └── main.jsx
 │   └── vite.config.js
 ├── project_tree.txt
 └── server
+    ├── database.js
     ├── index.js
+    ├── migrate.js
+    ├── news_aggregator.db
     ├── package-lock.json
     ├── package.json
     └── routes
-        └── articles.js
+        ├── articles.js
+        └── feeds.js
 
-7 directories, 16 files
+7 directories, 22 files

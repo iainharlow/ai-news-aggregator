@@ -4,7 +4,7 @@ const db = require('../database');
 
 router.get('/', async (req, res) => {
     try {
-        db.all(`SELECT DISTINCT feed_url FROM articles`, (err, rows) => {
+        db.all(`SELECT DISTINCT feed_url FROM feeds`, (err, rows) => {
             if (err) {
               console.error("Error fetching feeds from database: ", err);
               res.status(500).send({ message: 'Failed to fetch feeds', error: err.toString() });
