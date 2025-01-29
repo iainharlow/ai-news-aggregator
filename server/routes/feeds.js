@@ -32,11 +32,58 @@ router.post('/', (req, res) => {
       console.error("Error inserting feed: ", err);
       return res.status(500).json({ error: "Database insert failed" });
     }
-    // 'this.changes' is > 0 if a new row was inserted, 0 if it already existed
     if (this.changes === 0) {
       return res.json({ message: "Feed already exists or conflict occurred." });
     }
     res.json({ message: "Feed added successfully", feedId: this.lastID });
+  });
+});
+
+// PUT /feeds/:id - edit an existing feed
+router.put('/:id', (req, res) => {
+  const feedId = req.params.id;
+  const { feedUrl, feedName } = req.body;
+
+  if (!feedUrl) {
+    return res.status(400).json({ error: "feedUrl is required" });
+  }
+
+  db.run(`
+    UPDATE feeds
+    SET feed_url = ?, feed_name = ?
+    WHERE id = ?
+  `,
+  [feedUrl, feedName || null, feedId],
+  function (err) {
+    if (err) {
+      console.error("Error updating feed: ", err);
+      return res.status(500).json({ error: "Database update failed" });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ message: "Feed not found." });
+    }
+    res.json({ message: "Feed updated successfully." });
+  });
+});
+
+// DELETE /feeds/:id - delete an existing feed
+router.delete('/:id', (req, res) => {
+  const feedId = req.params.id;
+
+  db.run(`
+    DELETE FROM feeds
+    WHERE id = ?
+  `,
+  [feedId],
+  function (err) {
+    if (err) {
+      console.error("Error deleting feed: ", err);
+      return res.status(500).json({ error: "Database delete failed" });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ message: "Feed not found." });
+    }
+    res.json({ message: "Feed deleted successfully." });
   });
 });
 
