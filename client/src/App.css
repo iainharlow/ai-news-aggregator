@@ -1,58 +1,209 @@
+/* client/src/App.css */
+
+/* Global Styles */
 body {
-  font-family: Arial, sans-serif;
-  margin: 20px;
-  background-color: #f9f9f9;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  transition: background-color 0.3s, color 0.3s;
 }
 
-h1 {
-  text-align: center;
-  color: #333;
+h1, h2, h3 {
+  color: var(--primary-color);
 }
 
-h2 {
-  color: #555;
+a {
+  color: var(--link-color);
+  text-decoration: none;
 }
 
-ul {
+a:hover {
+  text-decoration: underline;
+}
+
+/* Light Mode Variables */
+:root {
+  --background-color: #ffffff;
+  --text-color: #333333;
+  --primary-color: #2c3e50;
+  --secondary-color: #2980b9;
+  --link-color: #2980b9;
+  --button-background: #2980b9;
+  --button-text: #ffffff;
+  --button-hover-background: #1c5980;
+  --error-color: #e74c3c;
+  --success-color: #27ae60;
+  --border-color: #bdc3c7;
+}
+
+/* Dark Mode Variables */
+body.dark-mode {
+  --background-color: #2c3e50;
+  --text-color: #ecf0f1;
+  --primary-color: #ecf0f1;
+  --secondary-color: #3498db;
+  --link-color: #3498db;
+  --button-background: #3498db;
+  --button-text: #ffffff;
+  --button-hover-background: #2980b9;
+  --error-color: #e74c3c;
+  --success-color: #27ae60;
+  --border-color: #34495e;
+}
+
+/* Container */
+div {
+  padding: 1rem;
+}
+
+/* Feed List Styles */
+.feed-list {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.feeds-ul, .archived-feeds-ul {
   list-style-type: none;
   padding: 0;
 }
 
-li {
-  margin-bottom: 0.5rem;
-}
-
-button {
-  padding: 0.5rem 1rem;
-  margin-left: 0.5rem;
-  background-color: #007BFF;
-  color: white;
-  border: none;
-  cursor: pointer;
-}
-
-button:hover {
-  background-color: #0056b3;
-}
-
-input[type="text"] {
+.feed-item, .archived-feed-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0.5rem;
-  margin: 0.5rem 0;
-  width: 100%;
-  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-color);
 }
 
-form {
-  background-color: white;
+.feed-label {
+  display: flex;
+  align-items: center;
+}
+
+.feed-checkbox {
+  margin-right: 0.5rem;
+}
+
+.edit-button, .reactivate-button, .archive-button, .clear-feed-button {
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 4px;
+  background-color: var(--button-background);
+  color: var(--button-text);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.edit-button:hover, .reactivate-button:hover, .archive-button:hover, .clear-feed-button:hover {
+  background-color: var(--button-hover-background);
+}
+
+.archive-button {
+  background-color: #e67e22;
+}
+
+.archive-button:hover {
+  background-color: #d35400;
+}
+
+.clear-feed-button {
+  background-color: #c0392b;
+}
+
+.clear-feed-button:hover {
+  background-color: #a93226;
+}
+
+/* Form Styles */
+.edit-feed-form, .feed-form {
+  background-color: var(--background-color);
   padding: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-}
-
-div {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   margin-bottom: 1rem;
 }
 
-p {
-  color: #666;
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.form-group input[type="text"] {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--background-color);
+  color: var(--text-color);
+}
+
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+button[type="submit"], .toggle-archive-button {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 4px;
+  background-color: var(--secondary-color);
+  color: var(--button-text);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button[type="submit"]:hover, .toggle-archive-button:hover {
+  background-color: #1e6a96;
+}
+
+button[type="button"] {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 4px;
+  background-color: #95a5a6;
+  color: var(--button-text);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button[type="button"]:hover {
+  background-color: #7f8c8d;
+}
+
+/* Error and Success Messages */
+.error-message {
+  color: var(--error-color);
+}
+
+.success-message {
+  color: var(--success-color);
+}
+
+/* Dark Mode Toggle Button */
+.dark-mode-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  background-color: var(--button-background);
+  color: var(--button-text);
+  border: none;
+  border-radius: 50%;
+  width: 3rem;
+  height: 3rem;
+  cursor: pointer;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.dark-mode-toggle:hover {
+  background-color: var(--button-hover-background);
 }

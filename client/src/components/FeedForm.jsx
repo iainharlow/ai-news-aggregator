@@ -1,3 +1,5 @@
+// client/src/components/FeedForm.jsx
+
 import React, { useState } from 'react';
 import axios from 'axios';
 
@@ -32,9 +34,9 @@ function FeedForm({ onFeedAdded }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginTop: "1rem" }}>
+    <form onSubmit={handleSubmit} className="feed-form">
       <h3>Add New Feed</h3>
-      <div>
+      <div className="form-group">
         <input
           type="text"
           value={feedName}
@@ -43,7 +45,7 @@ function FeedForm({ onFeedAdded }) {
           disabled={loading}
         />
       </div>
-      <div>
+      <div className="form-group">
         <input
           type="text"
           value={feedUrl}
@@ -56,7 +58,7 @@ function FeedForm({ onFeedAdded }) {
       <button type="submit" disabled={loading}>
         {loading ? "Adding..." : "Add Feed"}
       </button>
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="error-message">{error}</p>}
     </form>
   );
 }

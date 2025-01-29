@@ -22,8 +22,10 @@ function FeedList({ onFeedSelect }) {
     try {
       const response = await axios.get('http://localhost:3000/feeds');
       setFeeds(response.data.feeds);
+      console.log("Fetched feeds:", response.data.feeds);
     } catch (err) {
       setError(err);
+      console.error("Error fetching feeds:", err);
     } finally {
       setLoading(false);
     }
@@ -35,8 +37,10 @@ function FeedList({ onFeedSelect }) {
     try {
       const response = await axios.get('http://localhost:3000/feeds/archived');
       setArchivedFeeds(response.data.feeds);
+      console.log("Fetched archived feeds:", response.data.feeds);
     } catch (err) {
       setArchiveError(err);
+      console.error("Error fetching archived feeds:", err);
     } finally {
       setArchiveLoading(false);
     }
@@ -48,16 +52,24 @@ function FeedList({ onFeedSelect }) {
 
   const handleFeedChange = (feedUrl) => {
     setSelectedFeeds((prevSelected) => {
+      let updatedSelected;
       if (prevSelected.includes(feedUrl)) {
-        return prevSelected.filter((url) => url !== feedUrl);
+        updatedSelected = prevSelected.filter((url) => url !== feedUrl);
       } else {
-        return [...prevSelected, feedUrl];
+        updatedSelected = [...prevSelected, feedUrl];
       }
+      console.log("Selected Feeds Updated:", updatedSelected);
+      return updatedSelected;
     });
   };
 
   useEffect(() => {
-    onFeedSelect(selectedFeeds);
+    try {
+      onFeedSelect(selectedFeeds);
+      console.log("onFeedSelect called with:", selectedFeeds);
+    } catch (err) {
+      console.error("Error in onFeedSelect callback:", err);
+    }
   }, [selectedFeeds, onFeedSelect]);
 
   const handleFeedAdded = () => {
@@ -68,7 +80,7 @@ function FeedList({ onFeedSelect }) {
     setEditingFeedId(feedId);
   };
 
-  const handleDelete = async (feedId) => {
+  const handleArchive = async (feedId) => {
     if (!window.confirm("Are you sure you want to archive this feed?")) return;
 
     try {
@@ -84,6 +96,19 @@ function FeedList({ onFeedSelect }) {
     } catch (err) {
       console.error("Error archiving feed:", err);
       alert("Failed to archive feed. Please try again.");
+    }
+  };
+
+  const handleClearFeed = async (feedId) => {
+    if (!window.confirm("Are you sure you want to delete all articles from this feed? This action cannot be undone.")) return;
+
+    try {
+      await axios.delete(`http://localhost:3000/feeds/${feedId}/clear`);
+      alert("All articles from this feed have been deleted.");
+      // Optionally, you can refresh articles if displayed elsewhere
+    } catch (err) {
+      console.error("Error clearing feed articles:", err);
+      alert("Failed to clear feed articles. Please try again.");
     }
   };
 
@@ -123,18 +148,18 @@ function FeedList({ onFeedSelect }) {
   }
 
   return (
-    <div>
+    <div className="feed-list">
       <h2>Feeds</h2>
-      <button onClick={toggleArchive} style={{ marginBottom: "1rem" }}>
+      <button onClick={toggleArchive} className="toggle-archive-button">
         {showArchive ? "Hide Archive" : "Show Archive"}
       </button>
-      <ul>
+      <ul className="feeds-ul">
         {feeds.map((feed) => {
           const displayName = feed.feed_name || feed.feed_url;
           const isEditing = editingFeedId === feed.id;
 
           return (
-            <li key={feed.id} style={{ marginBottom: "0.5rem" }}>
+            <li key={feed.id} className="feed-item">
               {isEditing ? (
                 <EditFeedForm
                   feed={feed}
@@ -143,23 +168,17 @@ function FeedList({ onFeedSelect }) {
                 />
               ) : (
                 <>
-                  <label>
+                  <label className="feed-label">
                     <input
                       type="checkbox"
                       checked={selectedFeeds.includes(feed.feed_url)}
                       onChange={() => handleFeedChange(feed.feed_url)}
-                      style={{ marginRight: "0.5rem" }}
+                      className="feed-checkbox"
                     />
                     {displayName}
                   </label>
-                  <button onClick={() => handleEdit(feed.id)} style={{ marginLeft: "0.5rem" }}>
+                  <button onClick={() => handleEdit(feed.id)} className="edit-button">
                     Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(feed.id)}
-                    style={{ marginLeft: "0.5rem", backgroundColor: "#dc3545", color: "white" }}
-                  >
-                    Delete
                   </button>
                 </>
               )}
@@ -171,7 +190,7 @@ function FeedList({ onFeedSelect }) {
 
       {/* Archive Section */}
       {showArchive && (
-        <div style={{ marginTop: "2rem", borderTop: "1px solid #ccc", paddingTop: "1rem" }}>
+        <div className="archive-section">
           <h3>Archived Feeds</h3>
           {archiveLoading ? (
             <p>Loading archived feeds...</p>
@@ -180,15 +199,15 @@ function FeedList({ onFeedSelect }) {
           ) : archivedFeeds.length === 0 ? (
             <p>No archived feeds.</p>
           ) : (
-            <ul>
+            <ul className="archived-feeds-ul">
               {archivedFeeds.map((feed) => {
                 const displayName = feed.feed_name || feed.feed_url;
                 return (
-                  <li key={feed.id} style={{ marginBottom: "0.5rem" }}>
+                  <li key={feed.id} className="archived-feed-item">
                     {displayName}
                     <button
                       onClick={() => handleReactivate(feed.id)}
-                      style={{ marginLeft: "0.5rem", backgroundColor: "#28a745", color: "white" }}
+                      className="reactivate-button"
                     >
                       Reactivate
                     </button>

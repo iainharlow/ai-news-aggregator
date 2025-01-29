@@ -8,6 +8,8 @@ function EditFeedForm({ feed, onEdit, onCancel }) {
   const [feedName, setFeedName] = useState(feed.feed_name || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [clearing, setClearing] = useState(false); // State for clearing feed
+  const [clearError, setClearError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,37 +32,87 @@ function EditFeedForm({ feed, onEdit, onCancel }) {
     }
   };
 
+  const handleClearFeed = async () => {
+    if (!window.confirm("Are you sure you want to delete all articles from this feed? This action cannot be undone.")) return;
+
+    setClearing(true);
+    setClearError(null);
+
+    try {
+      await axios.delete(`http://localhost:3000/feeds/${feed.id}/clear`);
+      onEdit(); // Refresh feeds and articles if necessary
+      alert("All articles from this feed have been deleted.");
+    } catch (err) {
+      console.error("Error clearing feed articles:", err);
+      setClearError("Failed to clear feed articles. Please try again.");
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!window.confirm("Are you sure you want to archive this feed?")) return;
+
+    try {
+      await axios.delete(`http://localhost:3000/feeds/${feed.id}`);
+      onEdit(); // Refresh the feed list
+    } catch (err) {
+      console.error("Error archiving feed:", err);
+      alert("Failed to archive feed. Please try again.");
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} style={{ marginTop: "1rem", border: "1px solid #ccc", padding: "1rem" }}>
+    <form onSubmit={handleSubmit} className="edit-feed-form">
       <h3>Edit Feed</h3>
-      <div style={{ marginBottom: "0.5rem" }}>
-        <label style={{ display: "block", marginBottom: "0.2rem" }}>Feed Name (optional):</label>
+      <div className="form-group">
+        <label>Feed Name (optional):</label>
         <input
           type="text"
           value={feedName}
           onChange={(e) => setFeedName(e.target.value)}
-          disabled={loading}
-          style={{ width: "100%", padding: "0.5rem" }}
+          disabled={loading || clearing}
         />
       </div>
-      <div style={{ marginBottom: "0.5rem" }}>
-        <label style={{ display: "block", marginBottom: "0.2rem" }}>Feed URL:</label>
+      <div className="form-group">
+        <label>Feed URL:</label>
         <input
           type="text"
           value={feedUrl}
           onChange={(e) => setFeedUrl(e.target.value)}
           required
-          disabled={loading}
-          style={{ width: "100%", padding: "0.5rem" }}
+          disabled={loading || clearing}
         />
       </div>
-      <button type="submit" disabled={loading} style={{ padding: "0.5rem 1rem" }}>
-        {loading ? "Saving..." : "Save"}
-      </button>
-      <button type="button" onClick={onCancel} disabled={loading} style={{ padding: "0.5rem 1rem", marginLeft: "0.5rem" }}>
-        Cancel
-      </button>
-      {error && <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>}
+      {error && <p className="error-message">{error}</p>}
+      <div className="button-group">
+        <button type="submit" disabled={loading || clearing}>
+          {loading ? "Saving..." : "Save"}
+        </button>
+        <button type="button" onClick={onCancel} disabled={loading || clearing}>
+          Cancel
+        </button>
+      </div>
+      <hr />
+      <div className="button-group">
+        <button
+          type="button"
+          onClick={handleArchive}
+          disabled={loading || clearing}
+          className="archive-button"
+        >
+          Archive
+        </button>
+        <button
+          type="button"
+          onClick={handleClearFeed}
+          disabled={loading || clearing}
+          className="clear-feed-button"
+        >
+          {clearing ? "Clearing..." : "Clear Feed"}
+        </button>
+      </div>
+      {clearError && <p className="error-message">{clearError}</p>}
     </form>
   );
 }

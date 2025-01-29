@@ -117,8 +117,22 @@ router.get('/fetch', async (req, res) => {
           headers: { 'User-Agent': 'Mozilla/5.0' }
         });
         const $ = cheerio.load(articleResponse.data);
-        // Adjust selector as needed depending on the site structure
-        fullText = $('article').text() || "";
+        
+        // Attempt to extract full text using multiple selectors
+        fullText = $('article').text().trim() ||
+                  $('content\\:encoded').text().trim() ||
+                  $('description').text().trim() ||
+                  $('xhtml\\:div').text().trim() ||
+                  $('summary').text().trim() ||
+                  $('dc\\:description').text().trim() ||
+                  $('media\\:content').text().trim() ||
+                  $('div.post-content').text().trim() || 
+                  "";
+        
+        // Optionally, log if all selectors fail
+        if (!fullText) {
+          console.warn(`No content extracted for article: ${item.title}`);
+        }
       } catch (err) {
         console.warn("Could not fetch full article text:", err.message);
       }

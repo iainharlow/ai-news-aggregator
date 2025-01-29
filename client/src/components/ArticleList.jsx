@@ -1,26 +1,46 @@
+// client/src/components/ArticleList.jsx
+
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 function ArticleList({ feedUrls }) {
   const [articles, setArticles] = useState([]);
   const [fetchStatus, setFetchStatus] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isFetching, setIsFetching] = useState(false);
+  const [limit] = useState(20); // Number of articles per page
 
   useEffect(() => {
     if (!feedUrls || feedUrls.length === 0) {
       setArticles([]);
+      setCurrentPage(1);
+      setTotalPages(1);
       return;
     }
-    fetchArticles();
+    setCurrentPage(1);
+    fetchArticles(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedUrls]);
 
-  const fetchArticles = async () => {
+  const fetchArticles = async (page) => {
+    setIsFetching(true);
     try {
       const response = await axios.get(`http://localhost:3000/articles`, {
-        params: { feedUrls: feedUrls },
+        params: {
+          feedUrls: feedUrls,
+          page: page,
+          limit: limit
+        },
       });
-      setArticles(response.data);
+      setArticles(response.data.articles || []);
+      const calculatedTotalPages = Math.ceil((response.data.total || 0) / limit);
+      setTotalPages(calculatedTotalPages || 1);
+      console.log(`Fetched articles for page ${page}:`, response.data.articles);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching articles:", err);
+    } finally {
+      setIsFetching(false);
     }
   };
 
@@ -28,7 +48,6 @@ function ArticleList({ feedUrls }) {
     if (!feedUrls || feedUrls.length === 0) return;
     setFetchStatus("Checking for new articles...");
     try {
-      // Fetch new articles for all selected feeds
       const fetchPromises = feedUrls.map((url) =>
         axios.get(`http://localhost:3000/articles/fetch`, {
           params: { feedUrl: url },
@@ -50,38 +69,71 @@ function ArticleList({ feedUrls }) {
       }
 
       // Refresh the articles list
-      await fetchArticles();
+      await fetchArticles(currentPage);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching latest articles:", err);
       setFetchStatus("Error fetching articles.");
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
+      fetchArticles(nextPage);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      const prevPage = currentPage - 1;
+      setCurrentPage(prevPage);
+      fetchArticles(prevPage);
     }
   };
 
   if (!feedUrls || feedUrls.length === 0) return <p>No feeds selected.</p>;
 
   return (
-    <div>
+    <div className="article-list">
       <h2>Articles for Selected Feeds</h2>
-      <button onClick={handleFetchLatest}>Fetch Latest</button>
+      <button onClick={handleFetchLatest} disabled={isFetching} className="fetch-latest-button">
+        {isFetching ? "Fetching..." : "Fetch Latest"}
+      </button>
       <p>{fetchStatus}</p>
-      {articles.map((article) => (
-        <div key={article.id} style={{ marginBottom: "1rem" }}>
-          <h3>
-            <a href={article.link} target="_blank" rel="noopener noreferrer">
-              {article.title}
-            </a>
-          </h3>
-          <p>{article.summary}</p>
-          <p>
-            <em>
-              Published on:{" "}
-              {article.published_date
-                ? new Date(article.published_date).toLocaleString()
-                : "Unknown"}
-            </em>
-          </p>
+      {articles.length === 0 ? (
+        <p>No articles available.</p>
+      ) : (
+        <div>
+          {articles.map((article) => (
+            <div key={article.id} className="article-item">
+              <h3>
+                <a href={article.link} target="_blank" rel="noopener noreferrer">
+                  {article.title}
+                </a>
+              </h3>
+              <p>{article.summary}</p>
+              <p className="published-date">
+                <em>
+                  Published on:{" "}
+                  {article.published_date
+                    ? new Date(article.published_date).toLocaleString()
+                    : "Unknown"}
+                </em>
+              </p>
+            </div>
+          ))}
+          <div className="pagination">
+            <button onClick={handlePrevPage} disabled={currentPage === 1} className="pagination-button">
+              Previous
+            </button>
+            <span className="current-page">Page {currentPage} of {totalPages}</span>
+            <button onClick={handleNextPage} disabled={currentPage === totalPages} className="pagination-button">
+              Next
+            </button>
+          </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }

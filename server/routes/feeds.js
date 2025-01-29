@@ -135,4 +135,44 @@ router.put('/:id/reactivate', (req, res) => {
   );
 });
 
+// DELETE /feeds/:id/clear - Hard delete all articles associated with a feed
+router.delete('/:id/clear', async (req, res) => {
+    const feedId = req.params.id;
+  
+    try {
+      // Retrieve the feed URL based on feed ID
+      const feed = await new Promise((resolve, reject) => {
+        db.get(`SELECT feed_url FROM feeds WHERE id = ? AND deleted = 0`, [feedId], (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
+          }
+        });
+      });
+  
+      if (!feed) {
+        return res.status(404).json({ message: "Feed not found or already archived." });
+      }
+  
+      const feedUrl = feed.feed_url;
+  
+      // Delete articles associated with the feed
+      await new Promise((resolve, reject) => {
+        db.run(`DELETE FROM articles WHERE feed_url = ?`, [feedUrl], function (err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      });
+  
+      res.json({ message: "All articles from the feed have been deleted." });
+    } catch (err) {
+      console.error("Error clearing feed articles:", err);
+      res.status(500).json({ error: "Failed to clear feed articles." });
+    }
+  });
+
 module.exports = router;
