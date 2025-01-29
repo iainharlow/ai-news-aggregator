@@ -42,7 +42,8 @@ db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS feeds (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      feed_url TEXT UNIQUE
+      feed_url TEXT UNIQUE,
+      feed_name TEXT
     )
   `);
 
