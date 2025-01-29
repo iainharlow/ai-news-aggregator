@@ -29,7 +29,6 @@ function ArticleList({ feedUrl }) {
       } else {
         setFetchStatus("No new articles found.");
       }
-      // Now refresh the local list
       await fetchArticles();
     } catch (err) {
       console.error(err);
@@ -46,7 +45,11 @@ function ArticleList({ feedUrl }) {
       <p>{fetchStatus}</p>
       {articles.map(article => (
         <div key={article.id} style={{ marginBottom: "1rem" }}>
-          <h3>{article.title}</h3>
+          <h3>
+            <a href={article.link} target="_blank" rel="noopener noreferrer">
+              {article.title}
+            </a>
+          </h3>
           <p>{article.summary}</p>
         </div>
       ))}
