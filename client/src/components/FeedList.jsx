@@ -1,3 +1,5 @@
+// client/src/components/FeedList.jsx
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import FeedForm from './FeedForm';
@@ -8,13 +10,17 @@ function FeedList({ onFeedSelect }) {
   const [selectedFeeds, setSelectedFeeds] = useState([]);
   const [error, setError] = useState(null);
   const [editingFeedId, setEditingFeedId] = useState(null); // Track which feed is being edited
+  const [loading, setLoading] = useState(false);
 
   const fetchFeeds = async () => {
+    setLoading(true);
     try {
       const response = await axios.get('http://localhost:3000/feeds');
       setFeeds(response.data.feeds);
     } catch (err) {
       setError(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -27,7 +33,7 @@ function FeedList({ onFeedSelect }) {
       if (prevSelected.includes(feedUrl)) {
         return prevSelected.filter((url) => url !== feedUrl);
       } else {
-        return [...prevSelected, url];
+        return [...prevSelected, feedUrl];
       }
     });
   };
@@ -50,6 +56,11 @@ function FeedList({ onFeedSelect }) {
     try {
       await axios.delete(`http://localhost:3000/feeds/${feedId}`);
       fetchFeeds(); // Refresh the list after deletion
+      // Also remove from selectedFeeds if it was selected
+      setSelectedFeeds((prevSelected) => prevSelected.filter(url => {
+        const feed = feeds.find(f => f.id === feedId);
+        return feed ? feed.feed_url !== url : true;
+      }));
     } catch (err) {
       console.error("Error deleting feed:", err);
       alert("Failed to delete feed. Please try again.");
@@ -68,7 +79,8 @@ function FeedList({ onFeedSelect }) {
   if (error) {
     return <p>Error: {error.message}</p>;
   }
-  if (!feeds) {
+
+  if (loading) {
     return <p>Loading feeds...</p>;
   }
 
@@ -95,13 +107,14 @@ function FeedList({ onFeedSelect }) {
                       type="checkbox"
                       checked={selectedFeeds.includes(feed.feed_url)}
                       onChange={() => handleFeedChange(feed.feed_url)}
+                      style={{ marginRight: "0.5rem" }}
                     />
                     {displayName}
                   </label>
                   <button onClick={() => handleEdit(feed.id)} style={{ marginLeft: "0.5rem" }}>
                     Edit
                   </button>
-                  <button onClick={() => handleDelete(feed.id)} style={{ marginLeft: "0.5rem" }}>
+                  <button onClick={() => handleDelete(feed.id)} style={{ marginLeft: "0.5rem", backgroundColor: "#dc3545" }}>
                     Delete
                   </button>
                 </>

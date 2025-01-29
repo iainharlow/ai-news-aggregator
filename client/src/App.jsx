@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import FeedList from "./components/FeedList";
 import ArticleList from "./components/ArticleList";
+import './App.css';
 
 function App() {
   const [selectedFeedUrls, setSelectedFeedUrls] = useState([]);
