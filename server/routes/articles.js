@@ -1,64 +1,20 @@
+// server/routes/articles.js
+
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const RSSParser = require('rss-parser');
 const cheerio = require('cheerio');
-const db = require('../database');
-
-// For summarization
+const RSSParser = require('rss-parser');
+const he = require('he'); // Library for decoding HTML entities
+const db = require('../database'); // Your database module
 const { ChatOpenAI } = require("@langchain/openai");
 const { loadSummarizationChain } = require("langchain/chains");
 const { Document } = require("langchain/document");
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  1) LIST ALL ARTICLES (with optional ?feedUrl=...)
-// ─────────────────────────────────────────────────────────────────────────────
-// Ensure the GET /articles route can handle multiple feedUrls
-router.get('/', async (req, res) => {
-  let { feedUrls } = req.query;
+// Initialize RSS Parser
+const parser = new RSSParser();
 
-  if (!feedUrls) {
-    return res.json([]);
-  }
-
-  // Handle single string or array
-  if (typeof feedUrls === 'string') {
-    feedUrls = [feedUrls];
-  }
-
-  if (!Array.isArray(feedUrls)) {
-    return res.status(400).json({ error: "Invalid feedUrls parameter" });
-  }
-
-  // Convert array to string for SQL IN clause
-  const placeholders = feedUrls.map(() => '?').join(',');
-  const query = `
-    SELECT
-      a.id,
-      a.title,
-      a.link,
-      a.full_text,
-      a.published_date,
-      a.feed_url,
-      s.summary
-    FROM articles a
-    LEFT JOIN summaries s ON s.article_id = a.id
-    WHERE a.feed_url IN (${placeholders})
-    ORDER BY a.published_date DESC
-  `;
-
-  db.all(query, feedUrls, (err, rows) => {
-    if (err) {
-      console.error("Error retrieving articles from DB:", err);
-      return res.status(500).json({ error: "DB error", details: err.toString() });
-    }
-    return res.json(rows);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  2) FETCH NEW ARTICLES FROM THE FEED + SUMMARIZE
-// ─────────────────────────────────────────────────────────────────────────────
+// FETCH NEW ARTICLES FROM THE FEED + SUMMARIZE
 router.get('/fetch', async (req, res) => {
   try {
     const feedUrl = req.query.feedUrl;
@@ -66,18 +22,20 @@ router.get('/fetch', async (req, res) => {
       return res.status(400).json({ error: "Missing feedUrl parameter" });
     }
 
+    console.log(`Fetching articles from feed: ${feedUrl}`);
+
     // Fetch and parse the RSS feed
     const rssResponse = await axios.get(feedUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
-    const parser = new RSSParser();
+
     const feed = await parser.parseString(rssResponse.data);
 
     if (!feed.items || feed.items.length === 0) {
       return res.json({ message: 'No articles found in this feed.' });
     }
 
-    // Prepare for summarization
+    // Initialize the summarization chain
     const llm = new ChatOpenAI({
       openAIApiKey: process.env.OPENAI_API_KEY,
       modelName: "gpt-3.5-turbo"
@@ -89,6 +47,11 @@ router.get('/fetch', async (req, res) => {
 
     // Process each item in the RSS feed
     for (const item of feed.items) {
+      console.log(`\nProcessing article: "${item.title}"`);
+
+      // Log the entire item object
+      console.log(`Full item object: ${JSON.stringify(item, null, 2)}`);
+
       // Check if article with this link already exists
       const exists = await new Promise((resolve) => {
         db.get(
@@ -107,50 +70,88 @@ router.get('/fetch', async (req, res) => {
 
       if (exists) {
         // Article already in DB, skip
+        console.log(`- Article already exists in DB. Skipping.`);
         continue;
       }
 
-      // Article is new, so fetch the full text
+      // Initialize fullText
       let fullText = "";
-      try {
-        const articleResponse = await axios.get(item.link, {
-          headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-        const $ = cheerio.load(articleResponse.data);
-        
-        // Attempt to extract full text using multiple selectors
-        fullText = $('article').text().trim() ||
-                  $('content\\:encoded').text().trim() ||
-                  $('description').text().trim() ||
-                  $('xhtml\\:div').text().trim() ||
-                  $('summary').text().trim() ||
-                  $('dc\\:description').text().trim() ||
-                  $('media\\:content').text().trim() ||
-                  $('div.post-content').text().trim() || 
-                  "";
-        
-        // Optionally, log if all selectors fail
+
+      // Attempt to extract full text from <item>'s <description> or <content>
+      let descriptionContent = item.description || item.content || "";
+
+      if (descriptionContent) {
+        console.log(`- Extracting from <description> or <content>...`);
+        console.log(`  Raw description/content: ${descriptionContent.substring(0, 100)}...`);
+      
+        const $desc = cheerio.load(descriptionContent);
+      
+        // Remove unwanted elements
+        $desc('img, table, figure, hr, .promo, .subscribe, .quill-line, .quill-button').remove();
+      
+        // Extract text from paragraphs and headings
+        fullText = $desc('p, h2, h3').text().trim();
+      
+        // Decode HTML entities
+        fullText = he.decode(fullText);
+      
+        // Normalize whitespace
+        fullText = fullText.replace(/\s+/g, ' ').trim();
+      
+        console.log(`  Extracted fullText: "${fullText.substring(0, 100)}..."`);
+      
         if (!fullText) {
-          console.warn(`No content extracted for article: ${item.title}`);
+          console.warn(`  - No meaningful content extracted from description/content.`);
         }
-      } catch (err) {
-        console.warn("Could not fetch full article text:", err.message);
+      } else {
+        console.warn(`- No <description> or <content> found in <item>.`);
+      }
+
+      // If <description> is insufficient, fetch and parse the full article
+      if (!fullText) {
+        try {
+          console.log(`- Fetching full article content from webpage: ${item.link}`);
+          const articleResponse = await axios.get(item.link, {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+          });
+          const $ = cheerio.load(articleResponse.data);
+
+          // Attempt to extract full text using specific selectors
+          fullText = $('div.article-content, div.main-content, div.article-body, div.post-content, section.content').text().trim() || "";
+
+          if (fullText) {
+            console.log(`  Extracted fullText from webpage: "${fullText.substring(0, 100)}..."`);
+          } else {
+            console.warn(`  - No content extracted from webpage.`);
+          }
+        } catch (err) {
+          console.warn("  - Could not fetch full article text:", err.message);
+        }
+      }
+
+      // If still no content, skip summarization and insertion
+      if (!fullText) {
+        console.warn(`  - Skipping article due to no content: "${item.title}"`);
+        continue;
+      }
+
+      // Further normalize whitespace if needed
+      fullText = fullText.replace(/\s+/g, ' ').trim();
+
+      // Convert pubDate to ISO 8601 format
+      let publishedDate = null;
+      if (item.pubDate) {
+        const date = new Date(item.pubDate);
+        if (!isNaN(date)) {
+          publishedDate = date.toISOString();
+        }
       }
 
       // Insert the article into the DB
       const articleId = await new Promise((resolve) => {
-        // Convert pubDate to ISO 8601 format
-        let publishedDate = null;
-        if (item.pubDate) {
-          const date = new Date(item.pubDate);
-          if (!isNaN(date)) {
-            publishedDate = date.toISOString();
-          }
-        }
-
         db.run(
           `INSERT INTO articles (title, link, full_text, published_date, feed_url)
-          VALUES (?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?)`,
           [
             item.title || "Untitled",
             item.link,
@@ -160,9 +161,10 @@ router.get('/fetch', async (req, res) => {
           ],
           function (err) {
             if (err) {
-              console.error("Error inserting new article:", err);
+              console.error("  - Error inserting new article:", err);
               resolve(null);
             } else {
+              console.log(`  - Inserted article ID ${this.lastID}: "${item.title}"`);
               resolve(this.lastID);
             }
           }
@@ -171,27 +173,31 @@ router.get('/fetch', async (req, res) => {
 
       if (!articleId) {
         // If insert failed, skip summarization
+        console.warn(`  - Skipping summarization due to insert failure.`);
         continue;
       }
 
       // Summarize the article text
       try {
+        console.log(`  - Summarizing article ID ${articleId}...`);
         const document = new Document({ pageContent: fullText });
         const summaryResult = await chain.invoke({ input_documents: [document] });
         const summaryText = summaryResult.text;
 
-        // Insert summary
+        // Insert summary into the DB
         db.run(
           `INSERT INTO summaries (article_id, summary) VALUES (?, ?)`,
           [articleId, summaryText],
           (err) => {
             if (err) {
-              console.error("Error inserting summary:", err);
+              console.error("    - Error inserting summary:", err);
+            } else {
+              console.log(`    - Inserted summary for article ID ${articleId}.`);
             }
           }
         );
       } catch (err) {
-        console.warn("Error summarizing article:", err.message);
+        console.warn("  - Error summarizing article:", err.message);
       }
 
       newlyAdded.push(item.link);
@@ -200,8 +206,9 @@ router.get('/fetch', async (req, res) => {
     // Return a list of newly added articles
     const message = newlyAdded.length
       ? `Fetched and stored ${newlyAdded.length} new articles.`
-      : "No new articles added (all were already in DB).";
+      : "No new articles found.";
 
+    console.log(`\n${message}`);
     return res.json({ message, newlyAdded });
   } catch (error) {
     console.error("Error fetching or parsing RSS feed:", error);
