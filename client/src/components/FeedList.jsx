@@ -4,6 +4,7 @@ import FeedForm from './FeedForm';
 
 function FeedList({ onFeedSelect }) {
   const [feeds, setFeeds] = useState([]);
+  const [selectedFeeds, setSelectedFeeds] = useState([]);
   const [error, setError] = useState(null);
 
   const fetchFeeds = async () => {
@@ -19,8 +20,22 @@ function FeedList({ onFeedSelect }) {
     fetchFeeds();
   }, []);
 
+  const handleFeedChange = (feedUrl) => {
+    setSelectedFeeds((prevSelected) => {
+      if (prevSelected.includes(feedUrl)) {
+        return prevSelected.filter((url) => url !== feedUrl);
+      } else {
+        return [...prevSelected, feedUrl];
+      }
+    });
+  };
+
+  useEffect(() => {
+    onFeedSelect(selectedFeeds);
+  }, [selectedFeeds, onFeedSelect]);
+
   const handleFeedAdded = () => {
-    fetchFeeds(); // refresh the list
+    fetchFeeds(); // Refresh the list after adding a new feed
   };
 
   if (error) {
@@ -38,9 +53,14 @@ function FeedList({ onFeedSelect }) {
           const displayName = feed.feed_name || feed.feed_url;
           return (
             <li key={feed.id}>
-              <button onClick={() => onFeedSelect(feed.feed_url)}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={selectedFeeds.includes(feed.feed_url)}
+                  onChange={() => handleFeedChange(feed.feed_url)}
+                />
                 {displayName}
-              </button>
+              </label>
             </li>
           );
         })}

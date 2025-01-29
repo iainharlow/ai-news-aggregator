@@ -13,11 +13,26 @@ const { Document } = require("langchain/document");
 // ─────────────────────────────────────────────────────────────────────────────
 //  1) LIST ALL ARTICLES (with optional ?feedUrl=...)
 // ─────────────────────────────────────────────────────────────────────────────
+// Ensure the GET /articles route can handle multiple feedUrls
 router.get('/', async (req, res) => {
-  const { feedUrl } = req.query;
+  let { feedUrls } = req.query;
 
-  // Build the base query
-  let query = `
+  if (!feedUrls) {
+    return res.json([]);
+  }
+
+  // Handle single string or array
+  if (typeof feedUrls === 'string') {
+    feedUrls = [feedUrls];
+  }
+
+  if (!Array.isArray(feedUrls)) {
+    return res.status(400).json({ error: "Invalid feedUrls parameter" });
+  }
+
+  // Convert array to string for SQL IN clause
+  const placeholders = feedUrls.map(() => '?').join(',');
+  const query = `
     SELECT
       a.id,
       a.title,
@@ -28,22 +43,15 @@ router.get('/', async (req, res) => {
       s.summary
     FROM articles a
     LEFT JOIN summaries s ON s.article_id = a.id
+    WHERE a.feed_url IN (${placeholders})
+    ORDER BY a.published_date DESC
   `;
-  // If feedUrl is provided, filter
-  const params = [];
-  if (feedUrl) {
-    query += " WHERE a.feed_url = ?";
-    params.push(feedUrl);
-  }
-  // Sort by newest first, if you like
-  query += " ORDER BY a.id DESC";
 
-  db.all(query, params, (err, rows) => {
+  db.all(query, feedUrls, (err, rows) => {
     if (err) {
       console.error("Error retrieving articles from DB:", err);
       return res.status(500).json({ error: "DB error", details: err.toString() });
     }
-    // Return an array of articles, each with summary if present
     return res.json(rows);
   });
 });
@@ -117,20 +125,29 @@ router.get('/fetch', async (req, res) => {
 
       // Insert the article into the DB
       const articleId = await new Promise((resolve) => {
+        // Convert pubDate to ISO 8601 format
+        let publishedDate = null;
+        if (item.pubDate) {
+          const date = new Date(item.pubDate);
+          if (!isNaN(date)) {
+            publishedDate = date.toISOString();
+          }
+        }
+
         db.run(
           `INSERT INTO articles (title, link, full_text, published_date, feed_url)
-           VALUES (?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?)`,
           [
             item.title || "Untitled",
             item.link,
             fullText,
-            item.pubDate || null,
+            publishedDate,
             feedUrl
           ],
           function (err) {
             if (err) {
               console.error("Error inserting new article:", err);
-              resolve(null); // or reject
+              resolve(null);
             } else {
               resolve(this.lastID);
             }
