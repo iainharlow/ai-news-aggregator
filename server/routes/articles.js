@@ -78,7 +78,7 @@ router.get('/fetch', async (req, res) => {
       let fullText = "";
 
       // Attempt to extract full text from <item>'s <description> or <content>
-      let descriptionContent = item.description || item.content || "";
+      let descriptionContent = item['content:encoded'] || item.description || item.content || "";
 
       if (descriptionContent) {
         console.log(`- Extracting from <description> or <content>...`);
@@ -250,11 +250,18 @@ router.get('/', async (req, res) => {
       );
     });
 
-    // Query to get paginated articles
+    // Query to get paginated articles with summaries
     const articles = await new Promise((resolve, reject) => {
       const placeholders = feedUrlsArray.map(() => '?').join(',');
       db.all(
-        `SELECT * FROM articles WHERE feed_url IN (${placeholders}) ORDER BY published_date DESC LIMIT ? OFFSET ?`,
+        `
+        SELECT articles.*, summaries.summary
+        FROM articles
+        LEFT JOIN summaries ON articles.id = summaries.article_id
+        WHERE articles.feed_url IN (${placeholders})
+        ORDER BY articles.published_date DESC
+        LIMIT ? OFFSET ?
+        `,
         [...feedUrlsArray, parseInt(limit), parseInt(offset)],
         (err, rows) => {
           if (err) {
