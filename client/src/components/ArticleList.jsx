@@ -113,13 +113,8 @@ function ArticleList({ feedUrls }) {
                 </a>
               </h3>
               <p>{article.summary}</p>
-              <p className="published-date">
-                <em>
-                  Published on:{" "}
-                  {article.published_date
-                    ? new Date(article.published_date).toLocaleString()
-                    : "Unknown"}
-                </em>
+              <p className="article-meta">
+                {article.author}, {article.published_date ? new Date(article.published_date).toLocaleDateString() : "Unknown"}
               </p>
             </div>
           ))}

@@ -219,4 +219,58 @@ router.get('/fetch', async (req, res) => {
   }
 });
 
+// GET /articles?feedUrls=url1,url2&limit=20&page=1
+router.get('/', async (req, res) => {
+  try {
+    const { feedUrls, limit = 20, page = 1 } = req.query;
+
+    if (!feedUrls) {
+      return res.status(400).json({ error: "Missing feedUrls parameter" });
+    }
+
+    // Split feedUrls into an array
+    const feedUrlsArray = Array.isArray(feedUrls) ? feedUrls : feedUrls.split(',');
+
+    // Calculate offset for pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Query to get total count
+    const total = await new Promise((resolve, reject) => {
+      const placeholders = feedUrlsArray.map(() => '?').join(',');
+      db.get(
+        `SELECT COUNT(*) as count FROM articles WHERE feed_url IN (${placeholders})`,
+        feedUrlsArray,
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row.count);
+          }
+        }
+      );
+    });
+
+    // Query to get paginated articles
+    const articles = await new Promise((resolve, reject) => {
+      const placeholders = feedUrlsArray.map(() => '?').join(',');
+      db.all(
+        `SELECT * FROM articles WHERE feed_url IN (${placeholders}) ORDER BY published_date DESC LIMIT ? OFFSET ?`,
+        [...feedUrlsArray, parseInt(limit), parseInt(offset)],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+
+    return res.json({ articles, total });
+  } catch (error) {
+    console.error("Error fetching articles:", error);
+    return res.status(500).json({ error: "Failed to fetch articles." });
+  }
+});
+
 module.exports = router;
