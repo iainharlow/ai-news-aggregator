@@ -10,9 +10,19 @@ const db = require('../database'); // Your database module
 const { ChatOpenAI } = require("@langchain/openai");
 const { loadSummarizationChain } = require("langchain/chains");
 const { Document } = require("langchain/document");
+const { URL } = require('url');
 
 // Initialize RSS Parser
 const parser = new RSSParser();
+
+// Helper function to get selectors based on domain
+const getSelectorsForDomain = (hostname) => {
+  const selectorsMap = {
+    'every.to': 'div.article-content, div.post-content', // Adjust selectors as needed
+    // Add more domains and their specific selectors here
+  };
+  return selectorsMap[hostname] || 'div.article-content, div.main-content, div.article-body, div.post-content, section.content';
+};
 
 // FETCH NEW ARTICLES FROM THE FEED + SUMMARIZE
 router.get('/fetch', async (req, res) => {
@@ -48,10 +58,10 @@ router.get('/fetch', async (req, res) => {
     // Process each item in the RSS feed
     for (const item of feed.items) {
       console.log(`\nProcessing article: "${item.title}"`);
-
+    
       // Log the entire item object
       console.log(`Full item object: ${JSON.stringify(item, null, 2)}`);
-
+    
       // Check if article with this link already exists
       const exists = await new Promise((resolve) => {
         db.get(
@@ -67,46 +77,51 @@ router.get('/fetch', async (req, res) => {
           }
         );
       });
-
+    
       if (exists) {
         // Article already in DB, skip
         console.log(`- Article already exists in DB. Skipping.`);
         continue;
       }
-
-      // Initialize fullText
+    
+      // Initialize fullText and author
       let fullText = "";
-
-      // Attempt to extract full text from <item>'s <description> or <content>
-      let descriptionContent = item['content:encoded'] || item.description || item.content || "";
-
+      let author = "";
+    
+      // Attempt to extract full text from <description>, <content>, or <content:encoded>
+      let descriptionContent = item.description || item.content || item['content:encoded'] || "";
+    
       if (descriptionContent) {
-        console.log(`- Extracting from <description> or <content>...`);
+        console.log(`- Extracting from <description>, <content>, or <content:encoded>...`);
         console.log(`  Raw description/content: ${descriptionContent.substring(0, 100)}...`);
-      
+    
         const $desc = cheerio.load(descriptionContent);
-      
+    
         // Remove unwanted elements
         $desc('img, table, figure, hr, .promo, .subscribe, .quill-line, .quill-button').remove();
-      
+    
         // Extract text from paragraphs and headings
         fullText = $desc('p, h2, h3').text().trim();
-      
+    
         // Decode HTML entities
         fullText = he.decode(fullText);
-      
+    
         // Normalize whitespace
         fullText = fullText.replace(/\s+/g, ' ').trim();
-      
+    
         console.log(`  Extracted fullText: "${fullText.substring(0, 100)}..."`);
-      
+    
         if (!fullText) {
           console.warn(`  - No meaningful content extracted from description/content.`);
         }
       } else {
-        console.warn(`- No <description> or <content> found in <item>.`);
+        console.warn(`- No <description>, <content>, or <content:encoded> found in <item>.`);
       }
-
+    
+      // Extract author from possible fields
+      author = item.creator || item['dc:creator'] || "Unknown Author";
+      console.log(`  Extracted author: "${author}"`);
+    
       // If <description> is insufficient, fetch and parse the full article
       if (!fullText) {
         try {
@@ -115,29 +130,36 @@ router.get('/fetch', async (req, res) => {
             headers: { 'User-Agent': 'Mozilla/5.0' }
           });
           const $ = cheerio.load(articleResponse.data);
-
-          // Attempt to extract full text using specific selectors
-          fullText = $('div.article-content, div.main-content, div.article-body, div.post-content, section.content').text().trim() || "";
-
+    
+          // Parse the hostname to determine the domain
+          const hostname = new URL(item.link).hostname.replace('www.', '');
+    
+          // Get selectors based on domain
+          const selectors = getSelectorsForDomain(hostname);
+          console.log(`  Using selectors: "${selectors}"`);
+    
+          // Attempt to extract full text using domain-specific selectors
+          fullText = $(selectors).text().trim() || "";
+    
           if (fullText) {
             console.log(`  Extracted fullText from webpage: "${fullText.substring(0, 100)}..."`);
           } else {
-            console.warn(`  - No content extracted from webpage.`);
+            console.warn(`  - No content extracted from webpage using selectors: "${selectors}".`);
           }
         } catch (err) {
           console.warn("  - Could not fetch full article text:", err.message);
         }
       }
-
+    
       // If still no content, skip summarization and insertion
       if (!fullText) {
         console.warn(`  - Skipping article due to no content: "${item.title}"`);
         continue;
       }
-
+    
       // Further normalize whitespace if needed
       fullText = fullText.replace(/\s+/g, ' ').trim();
-
+    
       // Convert pubDate to ISO 8601 format
       let publishedDate = null;
       if (item.pubDate) {
@@ -146,18 +168,19 @@ router.get('/fetch', async (req, res) => {
           publishedDate = date.toISOString();
         }
       }
-
-      // Insert the article into the DB
+    
+      // Insert the article into the DB, including the author
       const articleId = await new Promise((resolve) => {
         db.run(
-          `INSERT INTO articles (title, link, full_text, published_date, feed_url)
-           VALUES (?, ?, ?, ?, ?)`,
+          `INSERT INTO articles (title, link, full_text, published_date, feed_url, author)
+           VALUES (?, ?, ?, ?, ?, ?)`,
           [
             item.title || "Untitled",
             item.link,
             fullText,
             publishedDate,
-            feedUrl
+            feedUrl,
+            author
           ],
           function (err) {
             if (err) {
@@ -170,20 +193,20 @@ router.get('/fetch', async (req, res) => {
           }
         );
       });
-
+    
       if (!articleId) {
         // If insert failed, skip summarization
         console.warn(`  - Skipping summarization due to insert failure.`);
         continue;
       }
-
+    
       // Summarize the article text
       try {
         console.log(`  - Summarizing article ID ${articleId}...`);
         const document = new Document({ pageContent: fullText });
         const summaryResult = await chain.invoke({ input_documents: [document] });
         const summaryText = summaryResult.text;
-
+    
         // Insert summary into the DB
         db.run(
           `INSERT INTO summaries (article_id, summary) VALUES (?, ?)`,
@@ -199,7 +222,7 @@ router.get('/fetch', async (req, res) => {
       } catch (err) {
         console.warn("  - Error summarizing article:", err.message);
       }
-
+    
       newlyAdded.push(item.link);
     }
 
