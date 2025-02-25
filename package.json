@@ -6,7 +6,8 @@
       "client": "cd client && npm run dev",
       "server": "cd server && node index.js",
       "dev": "concurrently \"npm run server\" \"npm run client\"",
-      "install-all": "npm install && cd client && npm install && cd ../server && npm install"
+      "install-all": "npm install && cd client && npm install && cd ../server && npm install",
+      "migrate": "cd server && npm run migrate"
     },
     "devDependencies": {
       "concurrently": "^8.2.2"

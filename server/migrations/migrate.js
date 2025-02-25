@@ -107,7 +107,8 @@ const createTables = () => {
         CREATE TABLE summaries (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           article_id INTEGER NOT NULL,
-          summary TEXT,
+          short_summary TEXT,
+          detailed_summary TEXT,
           FOREIGN KEY(article_id) REFERENCES articles(id)
         );
       `, (err) => {
@@ -116,6 +117,23 @@ const createTables = () => {
           reject(err);
         } else {
           console.log('Created summaries table.');
+        }
+      });
+
+      // Create overviews table
+      db.run(`
+        CREATE TABLE overviews (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          week_start TEXT NOT NULL,
+          content TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+      `, (err) => {
+        if (err) {
+          console.error('Error creating overviews table:', err);
+          reject(err);
+        } else {
+          console.log('Created overviews table.');
         }
       });
 

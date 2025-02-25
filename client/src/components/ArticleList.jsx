@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-function ArticleList({ feedUrls }) {
+// Use forwardRef to make this component referenceable from parent
+const ArticleList = React.forwardRef(function ArticleList({ feedUrls, hideFetchButton = false }, ref) {
   const [articles, setArticles] = useState([]);
   const [fetchStatus, setFetchStatus] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -22,6 +23,11 @@ function ArticleList({ feedUrls }) {
     fetchArticles(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedUrls]);
+
+  // Expose handleFetchLatest to parent component via ref
+  React.useImperativeHandle(ref, () => ({
+    handleFetchLatest
+  }));
 
   const fetchArticles = async (page) => {
     setIsFetching(true);
@@ -97,9 +103,11 @@ function ArticleList({ feedUrls }) {
   return (
     <div className="article-list">
       <h2>Articles for Selected Feeds</h2>
-      <button onClick={handleFetchLatest} disabled={isFetching} className="fetch-latest-button">
-        {isFetching ? "Fetching..." : "Fetch Latest"}
-      </button>
+      {!hideFetchButton && (
+        <button onClick={handleFetchLatest} disabled={isFetching} className="fetch-latest-button">
+          {isFetching ? "Fetching..." : "Fetch Latest"}
+        </button>
+      )}
       <p>{fetchStatus}</p>
       {articles.length === 0 ? (
         <p>No articles available.</p>
@@ -112,7 +120,13 @@ function ArticleList({ feedUrls }) {
                   {article.title}
                 </a>
               </h3>
-              <p>{article.summary}</p>
+              <p className="article-short-summary">{article.short_summary || article.summary}</p>
+              {article.detailed_summary && (
+                <div className="article-detailed-summary">
+                  <h4>Detailed Summary</h4>
+                  <p>{article.detailed_summary}</p>
+                </div>
+              )}
               <p className="article-meta">
                 {article.author}, {article.published_date ? new Date(article.published_date).toLocaleDateString() : "Unknown"}
               </p>
@@ -131,6 +145,6 @@ function ArticleList({ feedUrls }) {
       )}
     </div>
   );
-}
+});
 
 export default ArticleList;

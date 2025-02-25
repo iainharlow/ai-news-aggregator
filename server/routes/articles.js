@@ -18,13 +18,28 @@ const parser = new RSSParser();
 // Helper function to get selectors based on domain
 const getSelectorsForDomain = (hostname) => {
   const selectorsMap = {
-    'every.to': 'div.article-content, div.post-content', // Adjust selectors as needed
-    // Add more domains and their specific selectors here
+    'every.to': 'div.article-content, div.post-content, div.content-wrapper, div.post-body',
+    'oneusefulthing.org': 'div.post-content, div.body, article.post, div.substack-post',
+    'substack.com': 'div.post-content, div.body, article.post, div.substack-post',
+    'thegradient.pub': 'article.post-content, div.entry-content',
+    'huggingface.co': 'article, div.entry-content, div.post-content',
+    'openai.com': 'article, main, div.post-content',
+    'deepmind.com': 'article, main, div.post-content, div.article',
+    'amazon.science': 'div.article-body, article, main',
+    'ai-news.io': 'div.elementor-widget-container', 
+    'jack-clark.net': 'div.entry-content',
+    'sebastianraschka.com': 'article.post, div.article-content',
+    'aisupremacy.substack.com': 'div.post-content, div.body',
+    'thealgorithmicbridge.substack.com': 'div.post-content, div.body',
+    'thesequence.substack.com': 'div.post-content, div.body',
+    'lastweekin.ai': 'div.entry-content, main, article',
+    'interconnects.ai': 'article, div.post-content, div.entry-content',
+    'aiweirdness.com': 'div.entry, article, div.post-content'
   };
-  return selectorsMap[hostname] || 'div.article-content, div.main-content, div.article-body, div.post-content, section.content';
+  return selectorsMap[hostname] || 'article, div.article-content, div.main-content, div.post-content, div.entry-content, section.content, main, div.content';
 };
 
-// FETCH NEW ARTICLES FROM THE FEED + SUMMARIZE
+// FETCH NEW ARTICLES FROM THE FEED + SUMMARIZE (LIMIT TO 5 ARTICLES PER FEED)
 router.get('/fetch', async (req, res) => {
   try {
     const feedUrl = req.query.feedUrl;
@@ -45,18 +60,20 @@ router.get('/fetch', async (req, res) => {
       return res.json({ message: 'No articles found in this feed.' });
     }
 
-    // Initialize the summarization chain
+        // Initialize GPT-4o for summarization
     const llm = new ChatOpenAI({
       openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: "gpt-3.5-turbo"
+      modelName: "gpt-4o"
     });
-    const chain = loadSummarizationChain(llm, { type: "map_reduce" });
 
     // Track newly added articles for response
     const newlyAdded = [];
 
     // Process each item in the RSS feed
-    for (const item of feed.items) {
+    // Limit to processing only the 5 most recent items
+    const recentItems = feed.items.slice(0, 5);
+    
+    for (const item of recentItems) {
       console.log(`\nProcessing article: "${item.title}"`);
     
       // Log the entire item object
@@ -89,19 +106,62 @@ router.get('/fetch', async (req, res) => {
       let author = "";
     
       // Attempt to extract full text from <description>, <content>, or <content:encoded>
-      let descriptionContent = item.description || item.content || item['content:encoded'] || "";
-    
+      let descriptionContent = "";
+      let contentSource = "";
+      
+      // Use content:encoded if available (typically has the full article content)
+      if (item['content:encoded']) {
+        contentSource = 'content:encoded';
+        descriptionContent = item['content:encoded'];
+      } 
+      // Fallback to content if content:encoded is not available
+      else if (item.content) {
+        contentSource = 'content';
+        descriptionContent = item.content;
+      } 
+      // Fallback to description as last resort
+      else if (item.description) {
+        contentSource = 'description';
+        descriptionContent = item.description;
+      }
+
       if (descriptionContent) {
-        console.log(`- Extracting from <description>, <content>, or <content:encoded>...`);
-        console.log(`  Raw description/content: ${descriptionContent.substring(0, 100)}...`);
+        console.log(`- Extracting from <${contentSource}>...`);
+        console.log(`  Raw ${contentSource}: ${descriptionContent.substring(0, 100)}...`);
     
         const $desc = cheerio.load(descriptionContent);
     
         // Remove unwanted elements
         $desc('img, table, figure, hr, .promo, .subscribe, .quill-line, .quill-button').remove();
     
-        // Extract text from paragraphs and headings
-        fullText = $desc('p, h2, h3').text().trim();
+        // Extract text from paragraphs and headings with proper handling
+        let paragraphs = [];
+        
+        // First try to get paragraphs and headings
+        $desc('p, h1, h2, h3, h4, h5, h6, blockquote, li').each((index, element) => {
+          const text = $desc(element).text().trim();
+          if (text) paragraphs.push(text);
+        });
+        
+        // If no paragraphs found, try getting text from all elements
+        if (paragraphs.length === 0) {
+          $desc('body').find('*').not('script, style, iframe, img, table').each((index, element) => {
+            // Only get direct text nodes that are not empty
+            $desc(element).contents().each((i, el) => {
+              if (el.type === 'text') {
+                const text = $desc(el).text().trim();
+                if (text) paragraphs.push(text);
+              }
+            });
+          });
+        }
+        
+        // If still nothing, just get the entire text
+        if (paragraphs.length === 0) {
+          fullText = $desc('body').text().trim();
+        } else {
+          fullText = paragraphs.join('\n\n').trim();
+        }
     
         // Decode HTML entities
         fullText = he.decode(fullText);
@@ -137,23 +197,50 @@ router.get('/fetch', async (req, res) => {
           // Get selectors based on domain
           const selectors = getSelectorsForDomain(hostname);
           console.log(`  Using selectors: "${selectors}"`);
-    
-          // Attempt to extract full text using domain-specific selectors
-          fullText = $(selectors).text().trim() || "";
-    
-          if (fullText) {
-            console.log(`  Extracted fullText from webpage: "${fullText.substring(0, 100)}..."`);
+          
+          // Try domain-specific selectors first
+          let paragraphs = [];
+          $(selectors).each((index, element) => {
+            const text = $(element).text().trim();
+            if (text) paragraphs.push(text);
+          });
+          
+          // If no content found with domain-specific selectors,
+          // try to find any paragraphs or text blocks in the page
+          if (paragraphs.length === 0) {
+            console.log("  - No content found with domain selectors, trying fallback extraction");
+            $('article, .article, .post, .entry-content').find('p, h1, h2, h3, h4, h5, h6, blockquote, li').each((index, element) => {
+              const text = $(element).text().trim();
+              if (text) paragraphs.push(text);
+            });
+          }
+          
+          // Last resort: try any paragraphs in the page
+          if (paragraphs.length === 0) {
+            console.log("  - Still no content, trying any paragraphs in the page");
+            $('p').each((index, element) => {
+              const text = $(element).text().trim();
+              if (text && text.length > 100) paragraphs.push(text); // Only consider substantial paragraphs
+            });
+          }
+          
+          // Compile the full text from paragraphs
+          if (paragraphs.length > 0) {
+            fullText = paragraphs.join('\n\n').trim();
+            console.log(`  Extracted fullText from webpage (${paragraphs.length} paragraphs): "${fullText.substring(0, 100)}..."`);
           } else {
-            console.warn(`  - No content extracted from webpage using selectors: "${selectors}".`);
+            // Final fallback: get all text from main areas 
+            fullText = $('body').text().trim().replace(/\s+/g, ' ');
+            console.log("  - Using body text as final fallback");
           }
         } catch (err) {
           console.warn("  - Could not fetch full article text:", err.message);
         }
       }
     
-      // If still no content, skip summarization and insertion
-      if (!fullText) {
-        console.warn(`  - Skipping article due to no content: "${item.title}"`);
+      // If still no content or content is too short, skip this article
+      if (!fullText || fullText.length < 100) {
+        console.warn(`  - Skipping article due to insufficient content: "${item.title}"`);
         continue;
       }
     
@@ -200,25 +287,97 @@ router.get('/fetch', async (req, res) => {
         continue;
       }
     
-      // Summarize the article text
-      try {
-        console.log(`  - Summarizing article ID ${articleId}...`);
-        const document = new Document({ pageContent: fullText });
-        const summaryResult = await chain.invoke({ input_documents: [document] });
-        const summaryText = summaryResult.text;
-    
-        // Insert summary into the DB
-        db.run(
-          `INSERT INTO summaries (article_id, summary) VALUES (?, ?)`,
-          [articleId, summaryText],
-          (err) => {
+      // First check if we're using the new schema or old schema
+      const tableInfo = await new Promise((resolve, reject) => {
+        db.all(
+          "PRAGMA table_info(summaries)",
+          (err, rows) => {
             if (err) {
-              console.error("    - Error inserting summary:", err);
+              reject(err);
             } else {
-              console.log(`    - Inserted summary for article ID ${articleId}.`);
+              resolve(rows);
             }
           }
         );
+      });
+      
+      // Check if we have short_summary and detailed_summary columns
+      const hasNewSchema = tableInfo.some(col => col.name === 'short_summary');
+      
+      // Generate summaries based on schema
+      try {
+        console.log(`  - Summarizing article ID ${articleId}...`);
+        
+        // Generate short summary
+        const shortSummaryPrompt = `
+          You are an expert article summarizer tasked with creating a concise summary of the article below.
+          
+          Create a BRIEF summary of 1-2 sentences that captures the key information.
+          Focus on the core message and any unique insights.
+          Avoid filler phrases like 'this article discusses' or 'the author explains'.
+          Maximize information density with specific details.
+          
+          ARTICLE:
+          ${fullText}
+        `;
+        
+        // Send request for short summary
+        const shortSummaryResponse = await llm.invoke(shortSummaryPrompt);
+        const shortSummary = shortSummaryResponse.content;
+        
+        if (hasNewSchema) {
+          // Use new schema with both summary types
+          // Generate detailed summary
+          const detailedSummaryPrompt = `
+            You are an AI research assistant tasked with extracting all meaningful content from the article below.
+            
+            Create a DETAILED summary that captures as much meaningful information as possible.
+            Include:
+            - All unique or interesting statements and claims
+            - Key insights and perspectives
+            - Practical advice for consumers or builders
+            - Substantive technical details
+            
+            Exclude:
+            - Obvious or trite observations (e.g., "AI has potential to disrupt X")
+            - General background information familiar to AI practitioners
+            - Filler content and boilerplate descriptions
+            
+            Focus on high-information density and insights that would be valuable to someone who cannot read the full article.
+            
+            ARTICLE:
+            ${fullText}
+          `;
+          
+          const detailedSummaryResponse = await llm.invoke(detailedSummaryPrompt);
+          const detailedSummary = detailedSummaryResponse.content;
+          
+          // Insert summaries into the DB
+          db.run(
+            `INSERT INTO summaries (article_id, short_summary, detailed_summary) VALUES (?, ?, ?)`,
+            [articleId, shortSummary, detailedSummary],
+            (err) => {
+              if (err) {
+                console.error("    - Error inserting summaries:", err);
+              } else {
+                console.log(`    - Inserted summaries for article ID ${articleId}.`);
+              }
+            }
+          );
+        } else {
+          // Use old schema with only one summary field
+          db.run(
+            `INSERT INTO summaries (article_id, summary) VALUES (?, ?)`,
+            [articleId, shortSummary],
+            (err) => {
+              if (err) {
+                console.error("    - Error inserting summary:", err);
+              } else {
+                console.log(`    - Inserted summary for article ID ${articleId}.`);
+              }
+            }
+          );
+        }
       } catch (err) {
         console.warn("  - Error summarizing article:", err.message);
       }
@@ -238,6 +397,234 @@ router.get('/fetch', async (req, res) => {
     return res.status(500).json({
       message: "Failed to fetch articles.",
       error: error.toString(),
+    });
+  }
+});
+
+// Generate weekly overview of recent articles
+router.post('/generate-overview', async (req, res) => {
+  try {
+    console.log('Generating weekly overview of recent articles...');
+    
+    // Calculate date for past 7 days
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const oneWeekAgoStr = oneWeekAgo.toISOString();
+    
+    // Get the Monday of the current week for week_start
+    const currentDate = new Date();
+    const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 1 = Monday, ...
+    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust for Monday as first day
+    
+    const monday = new Date(currentDate);
+    monday.setDate(currentDate.getDate() - daysSinceMonday);
+    monday.setHours(0, 0, 0, 0);
+    const mondayStr = monday.toISOString();
+    
+    // Check if we're using the new schema or old schema
+    const tableInfo = await new Promise((resolve, reject) => {
+      db.all(
+        "PRAGMA table_info(summaries)",
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+    
+    // Check if we have short_summary and detailed_summary columns
+    const hasNewSchema = tableInfo.some(col => col.name === 'short_summary');
+    
+    // Get recent articles with summaries (using proper schema)
+    // Use detailed_summary for richer content in overview
+    const summaryField = hasNewSchema ? 'detailed_summary' : 'summary';
+    
+    console.log('Fetching recent articles from active feeds...');
+    const recentArticles = await new Promise((resolve, reject) => {
+      db.all(
+        `
+        SELECT articles.title, articles.author, articles.published_date, 
+               articles.link, summaries.${summaryField} as summary_content, feeds.feed_name
+        FROM articles
+        JOIN summaries ON articles.id = summaries.article_id
+        JOIN feeds ON articles.feed_url = feeds.feed_url
+        WHERE articles.published_date > ?
+        AND feeds.deleted = 0 -- Only consider active feeds
+        ORDER BY articles.published_date DESC
+        LIMIT 50
+        `,
+        [oneWeekAgoStr],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            console.log(`Found ${rows.length} recent articles from active feeds`);
+            resolve(rows);
+          }
+        }
+      );
+    });
+    
+    if (recentArticles.length === 0) {
+      return res.json({ 
+        message: 'No recent articles found to generate an overview.',
+        overview: null
+      });
+    }
+    
+    // Format article data for the prompt 
+    // Limit number of articles per feed to ensure diversity
+    console.log('Preparing articles for overview generation...');
+    
+    // Group articles by feed
+    const articlesByFeed = {};
+    recentArticles.forEach(article => {
+      if (!articlesByFeed[article.feed_name]) {
+        articlesByFeed[article.feed_name] = [];
+      }
+      articlesByFeed[article.feed_name].push(article);
+    });
+    
+    // Take max 3 articles from each feed
+    let articlesToUse = [];
+    Object.values(articlesByFeed).forEach(feedArticles => {
+      articlesToUse = [...articlesToUse, ...feedArticles.slice(0, 3)];
+    });
+    
+    // Sort by date and limit to 20 overall
+    articlesToUse.sort((a, b) => {
+      return new Date(b.published_date) - new Date(a.published_date);
+    });
+    articlesToUse = articlesToUse.slice(0, 20);
+    
+    console.log(`Using ${articlesToUse.length} articles from ${Object.keys(articlesByFeed).length} feeds for the overview`);
+    
+    const articlesForPrompt = articlesToUse.map(article => {
+      // Only include first 300 chars of each summary to limit prompt size
+      const summaryText = article.summary_content ? 
+        (article.summary_content.length > 300 ? 
+          article.summary_content.substring(0, 300) + '...' : 
+          article.summary_content) : 
+        'No summary available';
+        
+      return `TITLE: ${article.title}
+AUTHOR: ${article.author}
+SOURCE: ${article.feed_name}
+SUMMARY: ${summaryText}
+`;
+    }).join('\n---\n\n');
+    
+    console.log('Initializing OpenAI model...');
+    // Initialize GPT-4o for weekly overview summarization
+    const llm = new ChatOpenAI({
+      openAIApiKey: process.env.OPENAI_API_KEY,
+      modelName: "gpt-4o",
+      temperature: 0.7,
+      maxTokens: 1500,
+      timeout: 60000 // 60 second timeout
+    });
+    
+    // Generate the overview using GPT-4o
+    const overviewPrompt = `
+      You are an expert AI news analyst tasked with creating a weekly overview of recent AI developments.
+      
+      Below are summaries from articles published in the past 7 days in the AI field.
+      Create a comprehensive overview of the major themes, developments, and insights from these articles.
+      
+      Your overview should:
+      1. Identify 3-5 major themes and trends across these articles
+      2. Highlight the most significant developments
+      3. Extract key insights that would be valuable to AI researchers, developers, and enthusiasts
+      
+      Format your response as a weekly briefing with clear headings for different themes.
+      Be concise and focus on the most important information.
+      
+      ARTICLES FROM PAST 7 DAYS:
+      ${articlesForPrompt}
+    `;
+    
+    console.log('Sending request to OpenAI...');
+    try {
+      const overviewResponse = await llm.invoke(overviewPrompt);
+      const overviewContent = overviewResponse.content;
+      console.log('Successfully received OpenAI response');
+      
+      // Store the overview in the database
+      console.log('Storing overview in database...');
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO overviews (week_start, content, created_at) VALUES (?, ?, ?)`,
+          [mondayStr, overviewContent, new Date().toISOString()],
+          function(err) {
+            if (err) {
+              console.error('Error storing overview:', err);
+              reject(err);
+            } else {
+              console.log(`Overview created with ID ${this.lastID}`);
+              resolve(this.lastID);
+            }
+          }
+        );
+      });
+      
+      return res.json({
+        message: 'Weekly overview generated successfully.',
+        overview: {
+          week_start: mondayStr,
+          content: overviewContent,
+          created_at: new Date().toISOString(),
+          article_count: recentArticles.length
+        }
+      });
+    } catch (openaiError) {
+      console.error('Error from OpenAI:', openaiError);
+      
+      // Handle OpenAI errors gracefully
+      return res.status(500).json({
+        message: 'Error generating overview with OpenAI. Please try again later.',
+        error: openaiError.toString()
+      });
+    }
+  } catch (error) {
+    console.error('Error generating overview:', error);
+    return res.status(500).json({
+      message: 'Failed to generate weekly overview.',
+      error: error.toString()
+    });
+  }
+});
+
+// Get the latest weekly overview
+router.get('/overview', async (req, res) => {
+  try {
+    // Get the most recent overview
+    const overview = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM overviews ORDER BY created_at DESC LIMIT 1`,
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
+          }
+        }
+      );
+    });
+    
+    if (!overview) {
+      return res.status(404).json({ message: 'No overviews found.' });
+    }
+    
+    return res.json({ overview });
+    
+  } catch (error) {
+    console.error('Error fetching overview:', error);
+    return res.status(500).json({
+      message: 'Failed to fetch overview.',
+      error: error.toString()
     });
   }
 });
@@ -273,8 +660,9 @@ router.post('/fetch-all', async (req, res) => {
     
     for (const feed of feeds) {
       try {
-        console.log(`Processing feed: ${feed.feed_url}`);
+
         
+        console.log(`Processing feed: ${feed.feed_url} (limited to 5 most recent articles)`);
         const response = await axios.get(`http://localhost:3000/articles/fetch`, {
           params: { feedUrl: feed.feed_url }
         });
@@ -334,11 +722,15 @@ router.get('/', async (req, res) => {
     // Calculate offset for pagination
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    // Query to get total count
+    // Query to get total count (only from active feeds)
     const total = await new Promise((resolve, reject) => {
       const placeholders = feedUrlsArray.map(() => '?').join(',');
       db.get(
-        `SELECT COUNT(*) as count FROM articles WHERE feed_url IN (${placeholders})`,
+        `SELECT COUNT(*) as count 
+         FROM articles 
+         JOIN feeds ON articles.feed_url = feeds.feed_url
+         WHERE articles.feed_url IN (${placeholders})
+         AND feeds.deleted = 0`,
         feedUrlsArray,
         (err, row) => {
           if (err) {
@@ -350,18 +742,51 @@ router.get('/', async (req, res) => {
       );
     });
 
+    // Check if we're using the new schema or old schema
+    const tableInfo = await new Promise((resolve, reject) => {
+      db.all(
+        "PRAGMA table_info(summaries)",
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+    
+    // Check if we have short_summary and detailed_summary columns
+    const hasNewSchema = tableInfo.some(col => col.name === 'short_summary');
+    
     // Query to get paginated articles with summaries
     const articles = await new Promise((resolve, reject) => {
       const placeholders = feedUrlsArray.map(() => '?').join(',');
+      
+      const query = hasNewSchema
+        ? `
+          SELECT articles.*, summaries.short_summary, summaries.detailed_summary
+          FROM articles
+          LEFT JOIN summaries ON articles.id = summaries.article_id
+          JOIN feeds ON articles.feed_url = feeds.feed_url
+          WHERE articles.feed_url IN (${placeholders})
+          AND feeds.deleted = 0
+          ORDER BY articles.published_date DESC
+          LIMIT ? OFFSET ?
+          `
+        : `
+          SELECT articles.*, summaries.summary
+          FROM articles
+          LEFT JOIN summaries ON articles.id = summaries.article_id
+          JOIN feeds ON articles.feed_url = feeds.feed_url
+          WHERE articles.feed_url IN (${placeholders})
+          AND feeds.deleted = 0
+          ORDER BY articles.published_date DESC
+          LIMIT ? OFFSET ?
+          `;
+      
       db.all(
-        `
-        SELECT articles.*, summaries.summary
-        FROM articles
-        LEFT JOIN summaries ON articles.id = summaries.article_id
-        WHERE articles.feed_url IN (${placeholders})
-        ORDER BY articles.published_date DESC
-        LIMIT ? OFFSET ?
-        `,
+        query,
         [...feedUrlsArray, parseInt(limit), parseInt(offset)],
         (err, rows) => {
           if (err) {

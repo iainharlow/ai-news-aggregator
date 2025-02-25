@@ -1,11 +1,11 @@
-// client/src/components/FeedList.jsx
+// client/src/components/FeedTable.jsx
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import FeedForm from './FeedForm';
 import EditFeedForm from './EditFeedForm';
 
-function FeedList({ onFeedSelect }) {
+function FeedTable({ onFeedSelect }) {
   const [feeds, setFeeds] = useState([]);
   const [selectedFeeds, setSelectedFeeds] = useState([]);
   const [error, setError] = useState(null);
@@ -18,6 +18,41 @@ function FeedList({ onFeedSelect }) {
   const [selectAll, setSelectAll] = useState(false);
   const [sortBy, setSortBy] = useState('name'); // 'name' or 'count'
   const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
+
+  // Handle sorting
+  const handleSort = (field) => {
+    console.log(`Sorting by ${field}`);
+    // If clicking the same field, toggle direction
+    if (sortBy === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // If clicking a new field, set it as the sort field with ascending direction
+      setSortBy(field);
+      setSortDirection('asc');
+    }
+  };
+  
+  // Apply sorting to feeds
+  const getSortedFeeds = (feedList) => {
+    return [...feedList].sort((a, b) => {
+      let valueA, valueB;
+      
+      if (sortBy === 'name') {
+        valueA = a.feed_name || a.feed_url || '';
+        valueB = b.feed_name || b.feed_url || '';
+        return sortDirection === 'asc' ? 
+          valueA.localeCompare(valueB) : 
+          valueB.localeCompare(valueA);
+      } else if (sortBy === 'count') {
+        valueA = a.article_count || 0;
+        valueB = b.article_count || 0;
+        return sortDirection === 'asc' ? 
+          valueA - valueB : 
+          valueB - valueA;
+      }
+      return 0;
+    });
+  };
 
   // Fetch feeds based on current view mode
   const fetchFeeds = async () => {
@@ -146,17 +181,6 @@ function FeedList({ onFeedSelect }) {
     setEditingFeedId(null);
   };
 
-  const handleReactivate = async (feedId) => {
-    try {
-      await axios.put(`http://localhost:3000/feeds/${feedId}/reactivate`);
-      fetchFeeds(); // Refresh active feeds
-    } catch (err) {
-      console.error("Error reactivating feed:", err);
-      alert("Failed to reactivate feed. Please try again.");
-    }
-  };
-
-
   const toggleViewMode = () => {
     setViewMode(viewMode === 'active' ? 'archived' : 'active');
   };
@@ -233,6 +257,9 @@ function FeedList({ onFeedSelect }) {
     return <p>Loading archived feeds...</p>;
   }
 
+  // Sort the feeds
+  const sortedFeeds = getSortedFeeds(viewMode === 'active' ? feeds : archivedFeeds);
+
   return (
     <div className="feed-list">
       <div className="feed-list-header">
@@ -264,94 +291,92 @@ function FeedList({ onFeedSelect }) {
         </div>
       </div>
       
-      {/* Select All Checkbox */}
+      {/* Table Header with Sort Controls */}
       {(viewMode === 'active' && feeds.length > 0) || (viewMode === 'archived' && archivedFeeds.length > 0) ? (
-        <div className="select-all-container">
-          <label>
-            <input
-              type="checkbox"
-              checked={selectAll}
-              onChange={handleSelectAllChange}
-              className="select-all-checkbox"
-            />
-            Select/Deselect All
-          </label>
-        </div>
-      ) : null}
-      
-      {/* Active Feeds List */}
-      {viewMode === 'active' && (
-        <>
-          {feeds.length === 0 ? (
-            <p>No active feeds.</p>
-          ) : (
-            <ul className="feeds-ul">
-              {feeds.map((feed) => {
-                const displayName = feed.feed_name || feed.feed_url;
-                const isEditing = editingFeedId === feed.id;
+        <div className="feed-table">
+          <div className="feed-table-header">
+            <div className="select-all-cell">
+              <input
+                type="checkbox"
+                checked={selectAll}
+                onChange={handleSelectAllChange}
+                className="select-all-checkbox"
+              />
+            </div>
+            <div 
+              className={`feed-name-header ${sortBy === 'name' ? 'sorted' : ''}`}
+              onClick={() => handleSort('name')}
+            >
+              Feed Name
+              {sortBy === 'name' && (
+                <span className="sort-indicator">
+                  {sortDirection === 'asc' ? ' \u25b2' : ' \u25bc'}
+                </span>
+              )}
+            </div>
+            <div 
+              className={`feed-count-header ${sortBy === 'count' ? 'sorted' : ''}`}
+              onClick={() => handleSort('count')}
+            >
+              Articles
+              {sortBy === 'count' && (
+                <span className="sort-indicator">
+                  {sortDirection === 'asc' ? ' \u25b2' : ' \u25bc'}
+                </span>
+              )}
+            </div>
+            <div className="feed-actions-header">Actions</div>
+          </div>
 
-                return (
-                  <li key={feed.id} className="feed-item">
-                    {isEditing ? (
+          {/* Feed List Body */}
+          <div className="feed-table-body">
+            {sortedFeeds.map((feed) => {
+              const displayName = feed.feed_name || feed.feed_url;
+              const isEditing = editingFeedId === feed.id;
+
+              return (
+                <div key={feed.id} className="feed-table-row">
+                  {isEditing ? (
+                    <div className="feed-editing">
                       <EditFeedForm
                         feed={feed}
                         onEdit={handleEditComplete}
                         onCancel={handleEditCancel}
                       />
-                    ) : (
-                      <>
-                        <label className="feed-label">
-                          <input
-                            type="checkbox"
-                            checked={selectedFeeds.includes(feed.feed_url)}
-                            onChange={() => handleFeedChange(feed.feed_url)}
-                            className="feed-checkbox"
-                          />
-                          {displayName}
-                        </label>
-                        <button onClick={() => handleEdit(feed.id)} className="edit-button">
-                          Edit
-                        </button>
-                      </>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <FeedForm onFeedAdded={handleFeedAdded} />
-        </>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="feed-checkbox-cell">
+                        <input
+                          type="checkbox"
+                          checked={selectedFeeds.includes(feed.feed_url)}
+                          onChange={() => handleFeedChange(feed.feed_url)}
+                          className="feed-checkbox"
+                        />
+                      </div>
+                      <div className="feed-name-cell">{displayName}</div>
+                      <div className="feed-count-cell">{feed.article_count}</div>
+                      <div className="feed-actions-cell">
+                        <button onClick={() => handleEdit(feed.id)} className="edit-button">Edit</button>
+                        {viewMode === 'active' && (
+                          <button onClick={() => handleClearFeed(feed.id)} className="clear-button">Clear</button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <p>{viewMode === 'active' ? 'No active feeds.' : 'No archived feeds.'}</p>
       )}
       
-      {/* Archived Feeds List */}
-      {viewMode === 'archived' && (
-        <>
-          {archivedFeeds.length === 0 ? (
-            <p>No archived feeds.</p>
-          ) : (
-            <ul className="archived-feeds-ul">
-              {archivedFeeds.map((feed) => {
-                const displayName = feed.feed_name || feed.feed_url;
-                return (
-                  <li key={feed.id} className="archived-feed-item">
-                    <label className="feed-label">
-                      <input
-                        type="checkbox"
-                        checked={selectedFeeds.includes(feed.feed_url)}
-                        onChange={() => handleFeedChange(feed.feed_url)}
-                        className="feed-checkbox"
-                      />
-                      {displayName}
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
-      )}
+      {/* Only show the feed form when viewing active feeds */}
+      {viewMode === 'active' && <FeedForm onFeedAdded={handleFeedAdded} />}
     </div>
   );
 }
 
-export default FeedList;
+export default FeedTable;

@@ -3,10 +3,16 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 
-// GET /feeds - list existing (active) feeds
+// GET /feeds - list existing (active) feeds with article counts
 router.get('/', (req, res) => {
   db.all(
-    `SELECT id, feed_url, feed_name FROM feeds WHERE deleted = 0 ORDER BY id DESC`,
+    `SELECT feeds.id, feeds.feed_url, feeds.feed_name,
+            COUNT(articles.id) as article_count
+     FROM feeds
+     LEFT JOIN articles ON feeds.feed_url = articles.feed_url
+     WHERE feeds.deleted = 0
+     GROUP BY feeds.id
+     ORDER BY feeds.id DESC`,
     (err, rows) => {
       if (err) {
         console.error("Error fetching feeds: ", err);
@@ -97,10 +103,16 @@ router.delete('/:id', (req, res) => {
   );
 });
 
-// GET /feeds/archived - list archived (deleted) feeds
+// GET /feeds/archived - list archived (deleted) feeds with article counts
 router.get('/archived', (req, res) => {
   db.all(
-    `SELECT id, feed_url, feed_name FROM feeds WHERE deleted = 1 ORDER BY id DESC`,
+    `SELECT feeds.id, feeds.feed_url, feeds.feed_name,
+            COUNT(articles.id) as article_count
+     FROM feeds
+     LEFT JOIN articles ON feeds.feed_url = articles.feed_url
+     WHERE feeds.deleted = 1
+     GROUP BY feeds.id
+     ORDER BY feeds.id DESC`,
     (err, rows) => {
       if (err) {
         console.error("Error fetching archived feeds: ", err);
