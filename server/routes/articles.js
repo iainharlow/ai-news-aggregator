@@ -242,6 +242,83 @@ router.get('/fetch', async (req, res) => {
   }
 });
 
+// Fetch articles from all active feeds
+router.post('/fetch-all', async (req, res) => {
+  try {
+    console.log('Manual trigger: fetching all feeds');
+    
+    // Get all active feeds
+    const feeds = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, feed_url FROM feeds WHERE deleted = 0`,
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+    
+    if (feeds.length === 0) {
+      return res.json({ message: 'No feeds to process.' });
+    }
+    
+    // Process each feed
+    const results = {
+      totalFeeds: feeds.length,
+      successCount: 0,
+      errorCount: 0,
+      newArticlesCount: 0,
+      details: []
+    };
+    
+    for (const feed of feeds) {
+      try {
+        console.log(`Processing feed: ${feed.feed_url}`);
+        
+        const response = await axios.get(`http://localhost:3000/articles/fetch`, {
+          params: { feedUrl: feed.feed_url }
+        });
+        
+        const newlyAdded = response.data.newlyAdded || [];
+        results.newArticlesCount += newlyAdded.length;
+        results.successCount++;
+        
+        results.details.push({
+          feedUrl: feed.feed_url,
+          status: 'success',
+          newArticles: newlyAdded.length
+        });
+        
+        console.log(`Successfully processed feed: ${feed.feed_url}, found ${newlyAdded.length} new articles`);
+      } catch (err) {
+        console.error(`Error processing feed ${feed.feed_url}:`, err.message);
+        results.errorCount++;
+        results.details.push({
+          feedUrl: feed.feed_url,
+          status: 'error',
+          error: err.message
+        });
+      }
+    }
+    
+    console.log('Manual fetch-all completed:');
+    console.log(`- Processed: ${results.successCount} feeds successfully`);
+    console.log(`- Errors: ${results.errorCount} feeds`);
+    console.log(`- New articles: ${results.newArticlesCount} added`);
+    
+    res.json({
+      message: `Processed ${results.totalFeeds} feeds. Added ${results.newArticlesCount} new articles.`,
+      results
+    });
+  } catch (error) {
+    console.error("Error in fetch-all:", error);
+    return res.status(500).json({
+      message: "Failed to fetch articles from all feeds.",
+      error: error.toString()
+    });
+  }
+});
+
 // GET /articles?feedUrls=url1,url2&limit=20&page=1
 router.get('/', async (req, res) => {
   try {

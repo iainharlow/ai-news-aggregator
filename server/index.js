@@ -2,6 +2,8 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const { startScheduler } = require('./scheduler');
+
 
 // Load .env config
 dotenv.config();
@@ -24,6 +26,9 @@ app.use('/feeds', feedRouter);
 app.get('/', (req, res) => {
   res.send('Server is running');
 });
+
+// Start the scheduler
+startScheduler();
 
 // Start server
 app.listen(port, () => {

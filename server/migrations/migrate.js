@@ -143,12 +143,106 @@ const insertFeeds = () => {
       },
       {
         feed_url: "https://every.to/chain-of-thought/feed",
-        feed_name: "Chain Of Thought (Dan Shipper)",
+        feed_name: "Chain of Thought (Dan Shipper)",
         deleted: 0
       },
       {
         feed_url: "https://every.to/learning-curve/feed",
         feed_name: "Learning Curve (Rhea Purohit)",
+        deleted: 0
+      },
+    
+      // Institutional Sources
+      {
+        feed_url: "https://openai.com/blog/rss",
+        feed_name: "OpenAI Blog (OpenAI Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://deepmind.com/blog/feed/basic",
+        feed_name: "DeepMind Blog (DeepMind Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "http://googleaiblog.blogspot.com/atom.xml",
+        feed_name: "Google AI Blog (Google AI Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://blogs.microsoft.com/ai/feed",
+        feed_name: "Microsoft AI Blog (Microsoft Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://www.amazon.science/index.rss",
+        feed_name: "Amazon Science (Amazon Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://aws.amazon.com/blogs/machine-learning/feed",
+        feed_name: "AWS Machine Learning Blog (AWS Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://huggingface.co/blog/feed.xml",
+        feed_name: "Hugging Face Blog (Hugging Face Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://stability.ai/blog?format=rss",
+        feed_name: "Stability AI Blog (Stability AI Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://aihub.org/feed?cat=-473",
+        feed_name: "AIhub (Community)",
+        deleted: 0
+      },
+    
+      // Independent Expert Blogs & Newsletters
+      {
+        feed_url: "https://jack-clark.net/feed/",
+        feed_name: "Import AI (Jack Clark)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://thegradient.pub/rss/",
+        feed_name: "The Gradient (The Gradient Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://magazine.sebastianraschka.com/feed",
+        feed_name: "Ahead of AI (Sebastian Raschka)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://aisupremacy.substack.com/feed",
+        feed_name: "AI Supremacy (Michael Spencer)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://thealgorithmicbridge.substack.com/feed",
+        feed_name: "The Algorithmic Bridge (Alberto Romero)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://thesequence.substack.com/feed",
+        feed_name: "TheSequence (Jesus Rodriguez)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://lastweekin.ai/feed",
+        feed_name: "Last Week in AI (Skynet Today Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://www.interconnects.ai/feed",
+        feed_name: "Interconnects (Interconnects.ai Team)",
+        deleted: 0
+      },
+      {
+        feed_url: "https://www.aiweirdness.com/rss/",
+        feed_name: "AI Weirdness (Janelle Shane)",
         deleted: 0
       }
     ];
