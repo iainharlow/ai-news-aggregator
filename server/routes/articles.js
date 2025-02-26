@@ -7,10 +7,8 @@ const cheerio = require('cheerio');
 const RSSParser = require('rss-parser');
 const he = require('he'); // Library for decoding HTML entities
 const db = require('../database'); // Your database module
-const { ChatOpenAI } = require("@langchain/openai");
-const { loadSummarizationChain } = require("langchain/chains");
-const { Document } = require("langchain/document");
 const { URL } = require('url');
+const ai = require('../services/ai'); // Import our AI service
 
 // Initialize RSS Parser
 const parser = new RSSParser();
@@ -61,12 +59,12 @@ router.get('/fetch', async (req, res) => {
     }
 
         // Initialize o3-mini for summarization
-    const llm = new ChatOpenAI({
-      openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: "o3-mini",
-      temperature: 0.2,
-      maxCompletionTokens: 1500
-    });
+    // const llm = new ChatOpenAI({
+    //   openAIApiKey: process.env.OPENAI_API_KEY,
+    //   modelName: "o3-mini",
+    //   temperature: 0.2,
+    //   maxCompletionTokens: 1500
+    // });
 
     // Track newly added articles for response
     const newlyAdded = [];
@@ -310,51 +308,13 @@ router.get('/fetch', async (req, res) => {
       try {
         console.log(`  - Summarizing article ID ${articleId}...`);
         
-        // Generate short summary
-        const shortSummaryPrompt = `
-          You are an expert article summarizer tasked with creating a concise summary of the article below.
-          
-          Create a BRIEF summary of 1-2 sentences that captures the key information.
-          Focus on the core message and any unique insights.
-          Avoid filler phrases like 'this article discusses' or 'the author explains'.
-          Maximize information density with specific details.
-          
-          ARTICLE:
-          ${fullText}
-        `;
-        
-        // Send request for short summary
-        const shortSummaryResponse = await llm.invoke(shortSummaryPrompt);
-        const shortSummary = shortSummaryResponse.content;
+        // Generate short summary using our AI service
+        const shortSummary = await ai.generateShortSummary(fullText);
         
         if (hasNewSchema) {
           // Use new schema with both summary types
-          // Generate detailed summary
-          const detailedSummaryPrompt = `
-            Extract only meaningful, insightful content from the article below.
-            
-            Create a detailed summary that captures only the meaningful information.
-
-            Include:
-            - Unique or interesting statements and claims
-            - Novel insights, perspectives and implications
-            - Specific, practical advice for consumers or builders
-            - Differences between models; strengths and weaknesses
-            - Recent or uncoming releases if they are impactful
-            
-            Exclude:
-            - Common or trite observations (e.g., "AI has potential to disrupt X" / "Companies should plan to include AI")
-            - General background information familiar to AI practitioners
-            - Filler content and boilerplate descriptions
-            
-            ONLY return plain text, no markdown. Do not add any filler text, headings or formatting.
-            
-            ARTICLE:
-            ${fullText}
-          `;
-          
-          const detailedSummaryResponse = await llm.invoke(detailedSummaryPrompt);
-          const detailedSummary = detailedSummaryResponse.content;
+          // Generate detailed summary using our AI service
+          const detailedSummary = await ai.generateDetailedSummary(fullText);
           
           // Insert summaries into the DB
           db.run(
@@ -550,10 +510,10 @@ SUMMARY: ${summaryText}
       ${articlesForPrompt}
     `;
     
-    console.log('Sending request to OpenAI...');
+    console.log('Sending request to OpenAI via AI service...');
     try {
-      const overviewResponse = await llm.invoke(overviewPrompt);
-      const overviewContent = overviewResponse.content;
+      // Use our AI service instead of direct LangChain call
+      const overviewContent = await ai.generateWeeklyOverview(articlesForPrompt);
       console.log('Successfully received OpenAI response');
       
       // Store the overview in the database
@@ -668,13 +628,13 @@ router.post('/regenerate-summaries', async (req, res) => {
     
     console.log(`Found ${articles.length} articles to regenerate summaries for`);
     
-    // Initialize o3-mini for summarization
-    const llm = new ChatOpenAI({
-      openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: "o3-mini",
-      temperature: 0.2,
-      maxCompletionTokens: 1500
-    });
+    // Initialize o3-mini for summarization - replaced with AI service
+    // const llm = new ChatOpenAI({
+    //   openAIApiKey: process.env.OPENAI_API_KEY,
+    //   modelName: "o3-mini",
+    //   temperature: 0.2,
+    //   maxCompletionTokens: 1500
+    // });
     
     // Check if we're using the new schema or old schema
     const tableInfo = await new Promise((resolve, reject) => {
@@ -701,51 +661,13 @@ router.post('/regenerate-summaries', async (req, res) => {
       try {
         console.log(`Processing article ID ${article.id}: "${article.title}"`);
         
-        // Generate short summary
-        const shortSummaryPrompt = `
-          You are an expert article summarizer tasked with creating a concise summary of the article below.
-          
-          Create a BRIEF summary of 1-2 sentences that captures the key information.
-          Focus on the core message and any unique insights.
-          Avoid filler phrases like 'this article discusses' or 'the author explains'.
-          Maximize information density with specific details.
-          
-          ARTICLE:
-          ${article.full_text}
-        `;
-        
-        // Send request for short summary
-        const shortSummaryResponse = await llm.invoke(shortSummaryPrompt);
-        const shortSummary = shortSummaryResponse.content;
+        // Generate short summary using AI service
+        const shortSummary = await ai.generateShortSummary(article.full_text);
         
         if (hasNewSchema) {
           // Use new schema with both summary types
-          // Generate detailed summary
-          const detailedSummaryPrompt = `
-            Extract only meaningful, insightful content from the article below.
-            
-            Create a detailed summary that captures only the meaningful information.
-
-            Include:
-            - Unique or interesting statements and claims
-            - Novel insights, perspectives and implications
-            - Specific, practical advice for consumers or builders
-            - Differences between models; strengths and weaknesses
-            - Recent or uncoming releases if they are impactful
-            
-            Exclude:
-            - Common or trite observations (e.g., "AI has potential to disrupt X" / "Companies should plan to include AI")
-            - General background information familiar to AI practitioners
-            - Filler content and boilerplate descriptions
-            
-            ONLY return plain text, no markdown. Do not add any filler text, headings or formatting.
-            
-            ARTICLE:
-            ${article.full_text}
-          `;
-          
-          const detailedSummaryResponse = await llm.invoke(detailedSummaryPrompt);
-          const detailedSummary = detailedSummaryResponse.content;
+          // Generate detailed summary using AI service
+          const detailedSummary = await ai.generateDetailedSummary(article.full_text);
           
           // Check if summary already exists for this article
           const existingSummary = await new Promise((resolve) => {
