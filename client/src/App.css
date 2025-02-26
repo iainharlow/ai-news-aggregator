@@ -276,18 +276,20 @@ div {
 .feed-table-header {
   display: grid;
   grid-template-columns: 50px 1fr 100px 120px;
-  background-color: var(--secondary-color);
-  color: white;
+  color: var(--text-color);
   font-weight: bold;
-  padding: 0.5rem 0;
+  padding: 0.4rem 0;
+  align-items: center;
+  height: 2.2rem;
 }
 
 .feed-table-row {
   display: grid;
   grid-template-columns: 50px 1fr 100px 120px;
-  padding: 0.5rem 0;
+  padding: 0.3rem 0;
   border-bottom: 1px solid var(--border-color);
   align-items: center;
+  height: 2.2rem;
 }
 
 .feed-table-row:hover {
@@ -295,11 +297,24 @@ div {
 }
 
 .feed-name-header,
-.feed-count-header {
+.feed-count-header,
+.feed-actions-header {
   cursor: pointer;
   user-select: none;
   transition: background-color 0.2s;
   padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
+}
+
+.feed-count-header {
+  justify-content: center;
+}
+
+.feed-actions-header {
+  justify-content: center;
 }
 
 .feed-name-header:hover,
@@ -312,11 +327,26 @@ div {
   background-color: rgba(0, 0, 0, 0.2);
 }
 
+.sort-indicator {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.7em;
+  position: relative;
+  top: -1px;
+}
+
 .feed-checkbox-cell,
 .select-all-cell {
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+.feed-checkbox,
+.select-all-checkbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
 }
 
 .feed-name-cell {
@@ -330,6 +360,9 @@ div {
 .feed-count-cell {
   text-align: center;
   font-weight: bold;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .feed-actions-cell {
