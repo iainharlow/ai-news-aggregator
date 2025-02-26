@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-function OverviewPanel({ onRefreshClick }) {
+function OverviewPanel({ onRefreshClick, onRegenerateClick }) {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   // Fetch the latest overview when component mounts
   useEffect(() => {
@@ -77,6 +78,32 @@ function OverviewPanel({ onRefreshClick }) {
       setLoading(false);
     }
   };
+  
+  const handleRegenerateSummaries = async () => {
+    // Have the parent component regenerate summaries for selected feeds
+    setLoading(true);
+    setIsRegenerating(true);
+    setError(null);
+    
+    try {
+      console.log("Regenerating summaries...");
+      if (onRegenerateClick) {
+        const success = await onRegenerateClick();
+        if (!success) {
+          setError("No feeds selected or error regenerating summaries.");
+        } else {
+          // Fetch overview again to show it's done
+          fetchOverview();
+        }
+      }
+    } catch (err) {
+      console.error("Error regenerating summaries:", err);
+      setError("Failed to regenerate summaries. Please try again.");
+    } finally {
+      setLoading(false);
+      setIsRegenerating(false);
+    }
+  };
 
   // Format the date to be more readable
   const formatDate = (isoDate) => {
@@ -94,13 +121,22 @@ function OverviewPanel({ onRefreshClick }) {
     <div className="overview-panel">
       <div className="overview-header">
         <h2>Weekly AI News Overview</h2>
-        <button 
-          onClick={handleRefresh} 
-          disabled={loading} 
-          className="refresh-button"
-        >
-          {loading ? "Generating..." : "Refresh All Content"}
-        </button>
+        <div className="overview-actions">
+          <button 
+            onClick={handleRegenerateSummaries} 
+            disabled={loading} 
+            className="regenerate-button"
+          >
+            {loading && isRegenerating ? "Regenerating..." : "Regenerate Summaries"}
+          </button>
+          <button 
+            onClick={handleRefresh} 
+            disabled={loading} 
+            className="refresh-button"
+          >
+            {loading && !isRegenerating ? "Generating..." : "Refresh All Content"}
+          </button>
+        </div>
       </div>
       
       {error && <p className="error-message">{error}</p>}

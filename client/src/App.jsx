@@ -37,7 +37,7 @@ function App() {
     }
   }, [darkMode]);
 
-  // Common function for fetching articles that will be passed to both components
+  // Common functions for article management to be passed to components
   const handleFetchLatest = async () => {
     console.log("App handling fetch latest", selectedFeedUrls);
     if (!selectedFeedUrls || selectedFeedUrls.length === 0) {
@@ -61,6 +61,29 @@ function App() {
     }
   };
   
+  const handleRegenerateSummaries = async () => {
+    console.log("App handling regenerate summaries", selectedFeedUrls);
+    if (!selectedFeedUrls || selectedFeedUrls.length === 0) {
+      console.log("No feeds selected");
+      return false;
+    }
+    
+    try {
+      // Use the reference to ArticleList to call its regenerateSummaries method
+      if (articleListRef.current && articleListRef.current.handleRegenerateSummaries) {
+        console.log("Calling handleRegenerateSummaries on ArticleList");
+        await articleListRef.current.handleRegenerateSummaries();
+        return true;
+      } else {
+        console.log("ArticleList reference or method not available");
+        return false;
+      }
+    } catch (err) {
+      console.error("Error regenerating summaries from App:", err);
+      return false;
+    }
+  };
+  
   // Create a ref to access the ArticleList component
   const articleListRef = React.useRef();
 
@@ -70,7 +93,10 @@ function App() {
         <h1>AI News Aggregator</h1>
         
         {/* Overview panel goes at the top */}
-        <OverviewPanel onRefreshClick={handleFetchLatest} />
+        <OverviewPanel 
+          onRefreshClick={handleFetchLatest} 
+          onRegenerateClick={handleRegenerateSummaries} 
+        />
         
         <FeedTable onFeedSelect={(feeds) => {
           console.log("App received selected feeds:", feeds);

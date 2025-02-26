@@ -60,10 +60,12 @@ router.get('/fetch', async (req, res) => {
       return res.json({ message: 'No articles found in this feed.' });
     }
 
-        // Initialize GPT-4o for summarization
+        // Initialize o3-mini for summarization
     const llm = new ChatOpenAI({
       openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: "gpt-4o"
+      modelName: "o3-mini",
+      temperature: 0.2,
+      maxCompletionTokens: 1500
     });
 
     // Track newly added articles for response
@@ -329,21 +331,23 @@ router.get('/fetch', async (req, res) => {
           // Use new schema with both summary types
           // Generate detailed summary
           const detailedSummaryPrompt = `
-            You are an AI research assistant tasked with extracting all meaningful content from the article below.
+            Extract only meaningful, insightful content from the article below.
             
-            Create a DETAILED summary that captures as much meaningful information as possible.
+            Create a detailed summary that captures only the meaningful information.
+
             Include:
-            - All unique or interesting statements and claims
-            - Key insights and perspectives
-            - Practical advice for consumers or builders
-            - Substantive technical details
+            - Unique or interesting statements and claims
+            - Novel insights, perspectives and implications
+            - Specific, practical advice for consumers or builders
+            - Differences between models; strengths and weaknesses
+            - Recent or uncoming releases if they are impactful
             
             Exclude:
-            - Obvious or trite observations (e.g., "AI has potential to disrupt X")
+            - Common or trite observations (e.g., "AI has potential to disrupt X" / "Companies should plan to include AI")
             - General background information familiar to AI practitioners
             - Filler content and boilerplate descriptions
             
-            Focus on high-information density and insights that would be valuable to someone who cannot read the full article.
+            ONLY return plain text, no markdown. Do not add any filler text, headings or formatting.
             
             ARTICLE:
             ${fullText}
@@ -521,27 +525,27 @@ SUMMARY: ${summaryText}
     // Initialize GPT-4o for weekly overview summarization
     const llm = new ChatOpenAI({
       openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: "gpt-4o",
-      temperature: 0.7,
-      maxTokens: 1500,
+      modelName: "o3-mini",
+      maxCompletionTokens: 1500,
       timeout: 60000 // 60 second timeout
     });
     
-    // Generate the overview using GPT-4o
+    // Generate the overview using o3-mini
     const overviewPrompt = `
-      You are an expert AI news analyst tasked with creating a weekly overview of recent AI developments.
+      Creating a weekly overview of recent AI developments.
       
       Below are summaries from articles published in the past 7 days in the AI field.
-      Create a comprehensive overview of the major themes, developments, and insights from these articles.
+      Create a comprehensive overview of substantive developments, releases, and insights/advice from these articles.
+      Avoid fuzzy "web copy" language, be very concrete and focus on specific details and advice.
       
-      Your overview should:
-      1. Identify 3-5 major themes and trends across these articles
-      2. Highlight the most significant developments
-      3. Extract key insights that would be valuable to AI researchers, developers, and enthusiasts
+      The audience are the staff of an AI development studio. Their role is primarily to imagine, develop and sell AI-powered applications.
       
-      Format your response as a weekly briefing with clear headings for different themes.
+      Use absolutely no filler language. Be extremely direct and concrete. Your purpose is to inform, not to entertain. 
+      Include relevant and genuinely important developments, especially in major model capabilities or applications in finance, insurance or healthcare.
       Be concise and focus on the most important information.
       
+      Avoid weak constructions like "suggesting", "emphasizing the need for" or "offering new directions". Say what has happened, what likely will happen, and how businesses should react.
+      Never describe a model or product as offering improved or enhanced capabilities without describing the specific improvements.
       ARTICLES FROM PAST 7 DAYS:
       ${articlesForPrompt}
     `;
@@ -624,6 +628,235 @@ router.get('/overview', async (req, res) => {
     console.error('Error fetching overview:', error);
     return res.status(500).json({
       message: 'Failed to fetch overview.',
+      error: error.toString()
+    });
+  }
+});
+
+// POST /articles/regenerate-summaries - Regenerate summaries for selected feeds without fetching new content
+router.post('/regenerate-summaries', async (req, res) => {
+  try {
+    const { feedUrls } = req.body;
+    
+    if (!feedUrls || !Array.isArray(feedUrls) || feedUrls.length === 0) {
+      return res.status(400).json({ error: "Missing or invalid feedUrls parameter" });
+    }
+
+    console.log(`Regenerating summaries for ${feedUrls.length} feeds`);
+    
+    // Get all articles from the specified feeds
+    const articles = await new Promise((resolve, reject) => {
+      const placeholders = feedUrls.map(() => '?').join(',');
+      db.all(
+        `SELECT id, title, full_text, link FROM articles 
+         WHERE feed_url IN (${placeholders})
+         ORDER BY published_date DESC`,
+        feedUrls,
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+    
+    if (articles.length === 0) {
+      return res.json({ message: 'No articles found for the selected feeds.' });
+    }
+    
+    console.log(`Found ${articles.length} articles to regenerate summaries for`);
+    
+    // Initialize o3-mini for summarization
+    const llm = new ChatOpenAI({
+      openAIApiKey: process.env.OPENAI_API_KEY,
+      modelName: "o3-mini",
+      temperature: 0.2,
+      maxCompletionTokens: 1500
+    });
+    
+    // Check if we're using the new schema or old schema
+    const tableInfo = await new Promise((resolve, reject) => {
+      db.all(
+        "PRAGMA table_info(summaries)",
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+    
+    // Check if we have short_summary and detailed_summary columns
+    const hasNewSchema = tableInfo.some(col => col.name === 'short_summary');
+    
+    // Process all articles
+    let processed = 0;
+    let failures = 0;
+    
+    for (const article of articles) {
+      try {
+        console.log(`Processing article ID ${article.id}: "${article.title}"`);
+        
+        // Generate short summary
+        const shortSummaryPrompt = `
+          You are an expert article summarizer tasked with creating a concise summary of the article below.
+          
+          Create a BRIEF summary of 1-2 sentences that captures the key information.
+          Focus on the core message and any unique insights.
+          Avoid filler phrases like 'this article discusses' or 'the author explains'.
+          Maximize information density with specific details.
+          
+          ARTICLE:
+          ${article.full_text}
+        `;
+        
+        // Send request for short summary
+        const shortSummaryResponse = await llm.invoke(shortSummaryPrompt);
+        const shortSummary = shortSummaryResponse.content;
+        
+        if (hasNewSchema) {
+          // Use new schema with both summary types
+          // Generate detailed summary
+          const detailedSummaryPrompt = `
+            Extract only meaningful, insightful content from the article below.
+            
+            Create a detailed summary that captures only the meaningful information.
+
+            Include:
+            - Unique or interesting statements and claims
+            - Novel insights, perspectives and implications
+            - Specific, practical advice for consumers or builders
+            - Differences between models; strengths and weaknesses
+            - Recent or uncoming releases if they are impactful
+            
+            Exclude:
+            - Common or trite observations (e.g., "AI has potential to disrupt X" / "Companies should plan to include AI")
+            - General background information familiar to AI practitioners
+            - Filler content and boilerplate descriptions
+            
+            ONLY return plain text, no markdown. Do not add any filler text, headings or formatting.
+            
+            ARTICLE:
+            ${article.full_text}
+          `;
+          
+          const detailedSummaryResponse = await llm.invoke(detailedSummaryPrompt);
+          const detailedSummary = detailedSummaryResponse.content;
+          
+          // Check if summary already exists for this article
+          const existingSummary = await new Promise((resolve) => {
+            db.get(
+              `SELECT id FROM summaries WHERE article_id = ?`,
+              [article.id],
+              (err, row) => {
+                if (err || !row) {
+                  resolve(false);
+                } else {
+                  resolve(true);
+                }
+              }
+            );
+          });
+          
+          if (existingSummary) {
+            // Update existing summary
+            db.run(
+              `UPDATE summaries SET short_summary = ?, detailed_summary = ? WHERE article_id = ?`,
+              [shortSummary, detailedSummary, article.id],
+              (err) => {
+                if (err) {
+                  console.error(`Error updating summaries for article ID ${article.id}:`, err);
+                  failures++;
+                } else {
+                  console.log(`Updated summaries for article ID ${article.id}`);
+                  processed++;
+                }
+              }
+            );
+          } else {
+            // Insert new summary
+            db.run(
+              `INSERT INTO summaries (article_id, short_summary, detailed_summary) VALUES (?, ?, ?)`,
+              [article.id, shortSummary, detailedSummary],
+              (err) => {
+                if (err) {
+                  console.error(`Error inserting summaries for article ID ${article.id}:`, err);
+                  failures++;
+                } else {
+                  console.log(`Inserted summaries for article ID ${article.id}`);
+                  processed++;
+                }
+              }
+            );
+          }
+        } else {
+          // Use old schema with only one summary field
+          // Check if summary already exists for this article
+          const existingSummary = await new Promise((resolve) => {
+            db.get(
+              `SELECT id FROM summaries WHERE article_id = ?`,
+              [article.id],
+              (err, row) => {
+                if (err || !row) {
+                  resolve(false);
+                } else {
+                  resolve(true);
+                }
+              }
+            );
+          });
+          
+          if (existingSummary) {
+            // Update existing summary
+            db.run(
+              `UPDATE summaries SET summary = ? WHERE article_id = ?`,
+              [shortSummary, article.id],
+              (err) => {
+                if (err) {
+                  console.error(`Error updating summary for article ID ${article.id}:`, err);
+                  failures++;
+                } else {
+                  console.log(`Updated summary for article ID ${article.id}`);
+                  processed++;
+                }
+              }
+            );
+          } else {
+            // Insert new summary
+            db.run(
+              `INSERT INTO summaries (article_id, summary) VALUES (?, ?)`,
+              [article.id, shortSummary],
+              (err) => {
+                if (err) {
+                  console.error(`Error inserting summary for article ID ${article.id}:`, err);
+                  failures++;
+                } else {
+                  console.log(`Inserted summary for article ID ${article.id}`);
+                  processed++;
+                }
+              }
+            );
+          }
+        }
+      } catch (err) {
+        console.warn(`Error processing article ID ${article.id}:`, err.message);
+        failures++;
+      }
+    }
+    
+    return res.json({
+      message: `Regenerated summaries for ${processed} articles. Failed: ${failures}.`,
+      processed,
+      failures
+    });
+  } catch (error) {
+    console.error("Error regenerating summaries:", error);
+    return res.status(500).json({
+      message: "Failed to regenerate summaries.",
       error: error.toString()
     });
   }

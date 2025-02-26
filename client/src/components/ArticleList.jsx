@@ -10,6 +10,7 @@ const ArticleList = React.forwardRef(function ArticleList({ feedUrls, hideFetchB
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isFetching, setIsFetching] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [limit] = useState(20); // Number of articles per page
 
   useEffect(() => {
@@ -26,7 +27,8 @@ const ArticleList = React.forwardRef(function ArticleList({ feedUrls, hideFetchB
 
   // Expose handleFetchLatest to parent component via ref
   React.useImperativeHandle(ref, () => ({
-    handleFetchLatest
+    handleFetchLatest,
+    handleRegenerateSummaries
   }));
 
   const fetchArticles = async (page) => {
@@ -81,6 +83,27 @@ const ArticleList = React.forwardRef(function ArticleList({ feedUrls, hideFetchB
       setFetchStatus("Error fetching articles.");
     }
   };
+  
+  const handleRegenerateSummaries = async () => {
+    if (!feedUrls || feedUrls.length === 0) return;
+    setIsRegenerating(true);
+    setFetchStatus("Regenerating summaries...");
+    try {
+      const response = await axios.post('http://localhost:3000/articles/regenerate-summaries', {
+        feedUrls: feedUrls
+      });
+      
+      setFetchStatus(`${response.data.message}`);
+      
+      // Refresh the articles list to show updated summaries
+      await fetchArticles(currentPage);
+    } catch (err) {
+      console.error("Error regenerating summaries:", err);
+      setFetchStatus("Error regenerating summaries.");
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const handleNextPage = () => {
     if (currentPage < totalPages) {
@@ -103,11 +126,16 @@ const ArticleList = React.forwardRef(function ArticleList({ feedUrls, hideFetchB
   return (
     <div className="article-list">
       <h2>Articles for Selected Feeds</h2>
-      {!hideFetchButton && (
-        <button onClick={handleFetchLatest} disabled={isFetching} className="fetch-latest-button">
-          {isFetching ? "Fetching..." : "Fetch Latest"}
+      <div className="article-controls">
+        {!hideFetchButton && (
+          <button onClick={handleFetchLatest} disabled={isFetching} className="fetch-latest-button">
+            {isFetching ? "Fetching..." : "Fetch Latest"}
+          </button>
+        )}
+        <button onClick={handleRegenerateSummaries} disabled={isRegenerating || isFetching} className="regenerate-button">
+          {isRegenerating ? "Regenerating..." : "Regenerate Summaries"}
         </button>
-      )}
+      </div>
       <p>{fetchStatus}</p>
       {articles.length === 0 ? (
         <p>No articles available.</p>
