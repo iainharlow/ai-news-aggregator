@@ -481,35 +481,6 @@ SUMMARY: ${summaryText}
 `;
     }).join('\n---\n\n');
     
-    console.log('Initializing OpenAI model...');
-    // Initialize GPT-4o for weekly overview summarization
-    const llm = new ChatOpenAI({
-      openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: "o3-mini",
-      maxCompletionTokens: 1500,
-      timeout: 60000 // 60 second timeout
-    });
-    
-    // Generate the overview using o3-mini
-    const overviewPrompt = `
-      Creating a weekly overview of recent AI developments.
-      
-      Below are summaries from articles published in the past 7 days in the AI field.
-      Create a comprehensive overview of substantive developments, releases, and insights/advice from these articles.
-      Avoid fuzzy "web copy" language, be very concrete and focus on specific details and advice.
-      
-      The audience are the staff of an AI development studio. Their role is primarily to imagine, develop and sell AI-powered applications.
-      
-      Use absolutely no filler language. Be extremely direct and concrete. Your purpose is to inform, not to entertain. 
-      Include relevant and genuinely important developments, especially in major model capabilities or applications in finance, insurance or healthcare.
-      Be concise and focus on the most important information.
-      
-      Avoid weak constructions like "suggesting", "emphasizing the need for" or "offering new directions". Say what has happened, what likely will happen, and how businesses should react.
-      Never describe a model or product as offering improved or enhanced capabilities without describing the specific improvements.
-      ARTICLES FROM PAST 7 DAYS:
-      ${articlesForPrompt}
-    `;
-    
     console.log('Sending request to OpenAI via AI service...');
     try {
       // Use our AI service instead of direct LangChain call
@@ -779,6 +750,92 @@ router.post('/regenerate-summaries', async (req, res) => {
     console.error("Error regenerating summaries:", error);
     return res.status(500).json({
       message: "Failed to regenerate summaries.",
+      error: error.toString()
+    });
+  }
+});
+
+// POST /articles/fetch-new - Fetch new articles without regenerating existing ones
+router.post('/fetch-new', async (req, res) => {
+  try {
+    console.log('Manual trigger: fetching all feeds (only new articles)');
+    
+    // Get all active feeds
+    const feeds = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, feed_url FROM feeds WHERE deleted = 0`,
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+    
+    if (feeds.length === 0) {
+      return res.json({ message: 'No feeds to process.' });
+    }
+    
+    // Process each feed
+    const results = {
+      totalFeeds: feeds.length,
+      successCount: 0,
+      errorCount: 0,
+      newArticlesCount: 0,
+      details: []
+    };
+    
+    for (const feed of feeds) {
+      try {
+        console.log(`Processing feed: ${feed.feed_url} (limited to 5 most recent articles)`);
+        const response = await axios.get(`http://localhost:3000/articles/fetch`, {
+          params: { feedUrl: feed.feed_url }
+        });
+        
+        const newlyAdded = response.data.newlyAdded || [];
+        results.newArticlesCount += newlyAdded.length;
+        results.successCount++;
+        
+        results.details.push({
+          feedUrl: feed.feed_url,
+          status: 'success',
+          newArticles: newlyAdded.length
+        });
+        
+        console.log(`Successfully processed feed: ${feed.feed_url}, found ${newlyAdded.length} new articles`);
+      } catch (err) {
+        console.error(`Error processing feed ${feed.feed_url}:`, err.message);
+        results.errorCount++;
+        results.details.push({
+          feedUrl: feed.feed_url,
+          status: 'error',
+          error: err.message
+        });
+      }
+    }
+    
+    // Generate a fresh overview
+    try {
+      console.log('Generating fresh overview...');
+      const overviewResponse = await axios.post('http://localhost:3000/articles/generate-overview');
+      console.log('Overview generation successful:', overviewResponse.data.message);
+    } catch (err) {
+      console.error('Error generating overview:', err.message);
+      results.overview = { status: 'error', message: err.message };
+    }
+    
+    console.log('Fetch-new completed:');
+    console.log(`- Processed: ${results.successCount} feeds successfully`);
+    console.log(`- Errors: ${results.errorCount} feeds`);
+    console.log(`- New articles: ${results.newArticlesCount} added`);
+    
+    res.json({
+      message: `Processed ${results.totalFeeds} feeds. Added ${results.newArticlesCount} new articles.`,
+      results
+    });
+  } catch (error) {
+    console.error("Error in fetch-new:", error);
+    return res.status(500).json({
+      message: "Failed to fetch articles from feeds.",
       error: error.toString()
     });
   }

@@ -32,47 +32,24 @@ function OverviewPanel({ onRefreshClick, onRegenerateClick }) {
   };
 
   const handleRefresh = async () => {
-    // First have the parent component fetch latest articles
+    // Fetch new articles without regenerating existing summaries
     setLoading(true);
     setError(null);
     
     try {
-      // Step 1: Fetch latest articles
-      console.log("Fetching latest articles...");
-      let fetchSuccess = false;
-      if (onRefreshClick) {
-        fetchSuccess = await onRefreshClick();
-      }
+      console.log("Calling fetch-new endpoint...");
+      const response = await axios.post('http://localhost:3000/articles/fetch-new');
+      console.log("Refresh response:", response.data);
       
-      if (!fetchSuccess) {
-        setError("No feeds selected or error fetching articles.");
-        setLoading(false);
-        return;
-      }
+      // Refresh the overview display
+      await fetchOverview();
       
-      // Step 2: Generate a new overview with timeout
-      console.log("Generating new overview...");
-      
-      // Add timeout handling
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Overview generation timed out')), 120000); // 2 minute timeout
-      });
-      
-      const overviewPromise = axios.post('http://localhost:3000/articles/generate-overview');
-      
-      // Race between the actual request and the timeout
-      const response = await Promise.race([overviewPromise, timeoutPromise]);
-      setOverview(response.data.overview);
-      console.log("Overview generated successfully");
     } catch (err) {
       console.error("Error during refresh:", err);
-      if (err.message === 'Overview generation timed out') {
-        setError("Overview generation is taking too long. Please try again later.");
-      } else if (err.response && err.response.data && err.response.data.message) {
-        // Use the server's error message if available
+      if (err.response && err.response.data && err.response.data.message) {
         setError(`${err.response.data.message}`);
       } else {
-        setError("Failed to generate weekly overview. Please try again.");
+        setError("Failed to refresh content. Please try again.");
       }
     } finally {
       setLoading(false);

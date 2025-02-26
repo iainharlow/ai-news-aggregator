@@ -37,30 +37,10 @@ function App() {
     }
   }, [darkMode]);
 
-  // Common functions for article management to be passed to components
-  const handleFetchLatest = async () => {
-    console.log("App handling fetch latest", selectedFeedUrls);
-    if (!selectedFeedUrls || selectedFeedUrls.length === 0) {
-      console.log("No feeds selected");
-      return false;
-    }
-    
-    try {
-      // Use the reference to ArticleList to call its fetchLatest method
-      if (articleListRef.current && articleListRef.current.handleFetchLatest) {
-        console.log("Calling handleFetchLatest on ArticleList");
-        await articleListRef.current.handleFetchLatest();
-        return true;
-      } else {
-        console.log("ArticleList reference or method not available");
-        return false;
-      }
-    } catch (err) {
-      console.error("Error fetching latest articles from App:", err);
-      return false;
-    }
-  };
-  
+  // The Refresh All Content button now uses a separate endpoint
+  // that doesn't require selected feeds
+
+  // Regenerate Summaries button still requires selected feeds
   const handleRegenerateSummaries = async () => {
     console.log("App handling regenerate summaries", selectedFeedUrls);
     if (!selectedFeedUrls || selectedFeedUrls.length === 0) {
@@ -94,8 +74,7 @@ function App() {
         
         {/* Overview panel goes at the top */}
         <OverviewPanel 
-          onRefreshClick={handleFetchLatest} 
-          onRegenerateClick={handleRegenerateSummaries} 
+        onRegenerateClick={handleRegenerateSummaries} 
         />
         
         <FeedTable onFeedSelect={(feeds) => {
