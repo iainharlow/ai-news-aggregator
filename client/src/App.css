@@ -53,10 +53,12 @@ body.dark-mode {
   --border-color: #34495e;
 }
 
-/* Container */
+/* Remove any global padding on all divs to avoid extra spacing around the table */
+/*
 div {
   padding: 1rem;
 }
+*/
 
 /* Overview Panel Styles */
 .overview-panel {
@@ -184,6 +186,7 @@ div {
 .feed-list {
   max-width: 800px;
   margin: 0 auto;
+  padding: 0; /* Ensures table header/body align exactly */
 }
 
 .feed-list-header {
@@ -271,86 +274,115 @@ div {
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 1rem;
+  padding: 0;
 }
 
-.feed-table-header {
-  display: grid;
-  grid-template-columns: 50px 1fr 100px 120px;
-  color: var(--text-color);
-  font-weight: bold;
-  padding: 0.4rem 0;
-  align-items: center;
-  height: 2.2rem;
+.feed-table-header,
+.feed-table-body {
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
+/* UPDATED: Increased width of the Actions column from 120px to 150px 
+   so the Clear button is not cropped. */
+.feed-table-header,
 .feed-table-row {
   display: grid;
-  grid-template-columns: 50px 1fr 100px 120px;
-  padding: 0.3rem 0;
-  border-bottom: 1px solid var(--border-color);
+  grid-template-columns: 50px 1fr 100px 150px; /* 50 / flexible / 100 / 150 */
   align-items: center;
-  height: 2.2rem;
+  border-bottom: 1px solid var(--border-color);
+  margin: 0;
+}
+
+/* UPDATED: Increase header padding to create more vertical separation. */
+.feed-table-header {
+  color: var(--text-color);
+  font-weight: bold;
+  padding: 0.6rem 0; /* more vertical space */
+}
+
+/* Keep rows slightly tighter than the header. */
+.feed-table-row {
+  padding: 0.3rem 0;
 }
 
 .feed-table-row:hover {
   background-color: rgba(0, 0, 0, 0.05);
 }
 
-.feed-name-header,
-.feed-count-header,
-.feed-actions-header {
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.2s;
-  padding: 0 1rem;
+/* By default, center items horizontally and vertically in each cell */
+.feed-table-header > div,
+.feed-table-row > div {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  height: 100%;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
 }
 
+/* Feed Name column: left-aligned */
+.feed-name-header,
+.feed-name-cell {
+  justify-content: flex-start !important;
+  text-align: left !important;
+  padding-left: 0.5rem;
+}
+
+.select-all-cell,
+.feed-checkbox-cell {
+  justify-content: center;
+}
+
+.select-all-checkbox,
+.feed-checkbox {
+  margin: 0;
+  vertical-align: middle;
+}
+
+/* The 'Articles' column is centered by default */
+.feed-count-header,
+.feed-count-cell {
+  justify-content: center;
+}
+
+/* The 'Actions' column is centered; gap for spacing between buttons */
+.feed-actions-cell {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* Remove the border from the last row if you don’t want an extra line */
+.feed-table-body .feed-table-row:last-child {
+  border-bottom: none;
+}
+
+.feed-name-header,
 .feed-count-header {
-  justify-content: center;
-}
-
-.feed-actions-header {
-  justify-content: center;
+  cursor: pointer;
+  user-select: none;
 }
 
 .feed-name-header:hover,
 .feed-count-header:hover {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 .feed-name-header.sorted,
 .feed-count-header.sorted {
-  background-color: rgba(0, 0, 0, 0.2);
+  font-weight: 800;
 }
 
+/* UPDATED: Sorting indicator alignment */
 .sort-indicator {
   display: inline-block;
   margin-left: 4px;
   font-size: 0.7em;
-  position: relative;
-  top: -1px;
-}
-
-.feed-checkbox-cell,
-.select-all-cell {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.feed-checkbox,
-.select-all-checkbox {
-  cursor: pointer;
-  width: 16px;
-  height: 16px;
+  vertical-align: middle; /* remove position offset for better alignment */
 }
 
 .feed-name-cell {
-  padding: 0 1rem;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -358,17 +390,7 @@ div {
 }
 
 .feed-count-cell {
-  text-align: center;
   font-weight: bold;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.feed-actions-cell {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: center;
 }
 
 .feed-editing {
@@ -376,38 +398,50 @@ div {
   padding: 0.5rem;
 }
 
-.clear-button {
-  padding: 0.3rem 0.6rem;
-  background-color: #e67e22;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+/* UNIFY BUTTON SIZES */
+/* We'll style all action buttons the same and just change colors for 'Clear' vs 'Edit' */
+.feed-actions-cell button {
+  /* Ensures same minimal width for Edit & Clear, 
+     plus consistent padding & font size. */
+  min-width: 60px;       /* Adjust as desired */
+  padding: 0.3rem 0.8rem;
   font-size: 0.8rem;
-}
-
-.clear-button:hover {
-  background-color: #d35400;
-}
-
-.edit-button, .reactivate-button, .archive-button, .clear-feed-button {
-  padding: 0.4rem 0.8rem;
   border: none;
   border-radius: 4px;
-  background-color: var(--button-background);
-  color: var(--button-text);
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
-.edit-button:hover, .reactivate-button:hover, .archive-button:hover, .clear-feed-button:hover {
+/* Edit Button (blue) */
+.edit-button {
+  background-color: var(--button-background);
+  color: var(--button-text);
+}
+.edit-button:hover {
   background-color: var(--button-hover-background);
+}
+
+/* Clear Button (orange) */
+.clear-button {
+  background-color: #e67e22;
+  color: #ffffff;
+}
+.clear-button:hover {
+  background-color: #d35400;
+}
+
+/* Additional Button Classes (if used) */
+.reactivate-button, .archive-button, .clear-feed-button {
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 
 .archive-button {
   background-color: #e67e22;
 }
-
 .archive-button:hover {
   background-color: #d35400;
 }
@@ -415,7 +449,6 @@ div {
 .clear-feed-button {
   background-color: #c0392b;
 }
-
 .clear-feed-button:hover {
   background-color: #a93226;
 }
